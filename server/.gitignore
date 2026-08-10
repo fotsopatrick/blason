@@ -1,0 +1,5 @@
+# Base SQLite locale (créée automatiquement au démarrage du serveur)
+questforge.db
+
+# Fichiers uploadés (avatars, livrables)
+storage/

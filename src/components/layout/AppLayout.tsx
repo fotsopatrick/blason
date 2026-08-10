@@ -42,6 +42,8 @@ export default function AppLayout() {
     { to: '/app', label: 'Tableau de bord', icon: '🏰', end: true },
     { to: '/app/quests', label: 'Quêtes', icon: '📜' },
     { to: '/app/my-quests', label: 'Mes quêtes', icon: '🎯' },
+    { to: '/app/offres', label: 'Carrière', icon: '💼' },
+    { to: '/app/entretiens', label: 'Entretiens', icon: '🎤' },
     { to: '/app/guilds', label: 'Guildes', icon: '🛡️' },
     { to: '/app/leaderboard', label: 'Classements', icon: '🏆' },
   ]

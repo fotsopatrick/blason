@@ -1,72 +1,58 @@
-# ⚔️ QuestForge
+# QuestForge
 
-Plateforme d'apprentissage gamifiée qui transforme des offres d'emploi en **quêtes** / projets.
-Les étudiants forment des **guildes**, complètent des quêtes, gagnent de l'**XP**, montent en
-niveau et construisent un **portfolio** prouvant leurs compétences.
+Plateforme (React + Vite + TypeScript) qui transforme des offres d'emploi en **quêtes** : les étudiants forment des **guildes**, complètent des quêtes, gagnent de l'**XP**, montent en niveau et construisent un **portfolio** de réalisations. Un volet carrière regroupe les offres par domaine, les entretiens et les projets qui montrent ce qu'on sait faire.
 
-## Stack
+## Backend
 
-- **Frontend** : React 18 + TypeScript + Vite + Tailwind v4 + DaisyUI 5, Framer Motion,
-  TanStack React Query, React Router.
-- **Backend / BaaS** : Supabase (Auth email + Google OAuth, Postgres + RLS, Realtime, Storage).
-- **Génération IA** : Edge Function Supabase `generate-quest`, provider configurable
-  (Claude ou DeepSeek) — la clé API reste **côté serveur**.
+100 % local — Express + SQLite natif Node (`node:sqlite`). **Aucune clé API, aucun compte tiers, aucun paiement.** Les données vivent dans un fichier `server/questforge.db`, créé automatiquement au premier démarrage du serveur. Les uploads (avatars, livrables) sont stockés dans `server/storage/`.
 
 ## Démarrage
 
-### Prérequis
-- Node 20+, Docker Desktop, Supabase CLI.
+Prérequis : Node 22+ (avec support de `node:sqlite`).
 
-### 1. Lancer Supabase (local)
-```bash
-supabase start
-```
-Crée la base (migrations), applique le seed et les buckets Storage. Ports (préfixe `545xx`) :
-API `54521`, DB `54522`, Studio `54523`, Mailpit `54524`.
+**Production / usage simple — 3 étapes :**
 
-### 2. Variables d'environnement frontend
-Copier `.env.example` → `.env` (déjà pré-rempli avec les clés locales par défaut de Supabase) :
-```
-VITE_SUPABASE_URL=http://127.0.0.1:54521
-VITE_SUPABASE_ANON_KEY=<clé anon locale>
-```
-
-### 3. Clé du provider IA (pour la génération de quêtes)
-Copier `supabase/functions/.env.example` → `supabase/functions/.env` et renseigner :
-```
-AI_PROVIDER=claude          # ou deepseek
-ANTHROPIC_API_KEY=sk-ant-…  # si claude
-# DEEPSEEK_API_KEY=…        # si deepseek
-```
-Puis (re)démarrer les fonctions : `supabase functions serve` (ou relancer `supabase start`).
-Sans clé, toute la plateforme fonctionne ; seule la génération IA renvoie une erreur explicite.
-
-### 4. Lancer le front
 ```bash
 npm install
-npm run dev        # http://localhost:5173
+npm run build      # construit le front dans dist/
+npm start          # serveur sur http://localhost:8088 — sert le front + l'API
 ```
 
-## Comptes de test (seed)
+**En développement — deux terminaux :**
 
-| Rôle       | Email                  | Mot de passe        |
-|------------|------------------------|---------------------|
-| Admin      | admin@questforge.dev   | `AdminForge2026!`   |
-| Entreprise | contact@technova.dev   | `CompanyForge2026!` |
-| Étudiante  | aria@student.dev       | `StudentForge2026!` |
+```bash
+# Terminal 1 : l'API (port 8088)
+npm start
 
-Autres étudiants (même mot de passe `StudentForge2026!`) : `kai@`, `luna@`, `milo@`, `zoe@student.dev`.
+# Terminal 2 : le front Vite (port 5173, rechargement à chaud)
+npm run dev
+```
 
-## Google OAuth (optionnel)
+En dev, crée un fichier `.env` à la racine avec :
 
-Désactivé par défaut. Pour l'activer en local : dans `supabase/config.toml`, passer
-`[auth.external.google] enabled = true`, exporter `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`
-et `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET`, puis `supabase start`. Le bouton Google est déjà câblé
-côté front (`/auth/callback`).
+```
+VITE_API_URL=http://localhost:8088/api
+```
 
-## Rôles & sécurité
+Sur un shell Unix, `npm run dev:all` lance les deux d'un coup. Sur Windows, préfère deux terminaux.
 
-Trois rôles en base (`profiles.role`) : `student`, `company`, `admin`. Tout est protégé par
-**RLS** ; les opérations sensibles passent par des fonctions `security definer`
-(`join_guild`, `create_guild`, `leave_guild`, `review_submission`, `admin_stats`, leaderboards).
-Le rôle admin est vérifié via `is_admin()` côté base **et** par un guard côté front.
+## Comptes
+
+À la première utilisation, il faut s'inscrire avec une adresse email et un mot de passe (au moins 8 caractères). Aucun compte n'est pré-rempli.
+
+## Structure des dossiers
+
+```
+server/        Serveur Express + schéma SQLite (index.cjs, schema.sql)
+src/           Front React (pages, composants, lib)
+dist/          Build statique du front (généré par npm run build)
+```
+
+## Déploiement
+
+Deux options selon le besoin :
+
+- **GitHub Pages** — déploie uniquement le build statique (`npm run build`, publier `dist/`). Le site est consultable, mais **sans persistance** : les comptes et les données ne survivent pas (pas de serveur).
+- **Petit VPS / serveur Node** — `npm install && npm run build && npm start`. Le serveur sert le front **et** l'API, et les données sont persistées dans `server/questforge.db`. C'est l'option recommandée dès qu'on veut garder les comptes et les données.
+
+En français, un vocabulaire produit simple : une quête menée à bien est une **réalisation**, un **projet**, un **atout** à présenter.

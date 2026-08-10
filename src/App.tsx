@@ -14,6 +14,9 @@ import QuestDetailPage from '@/pages/quests/QuestDetailPage'
 import QuestCreatePage from '@/pages/quests/QuestCreatePage'
 import WorkspacePage from '@/pages/quests/WorkspacePage'
 import MyQuestsPage from '@/pages/quests/MyQuestsPage'
+import OffresPage from '@/pages/carriere/OffresPage'
+import OffreDetailPage from '@/pages/carriere/OffreDetailPage'
+import EntretiensPage from '@/pages/carriere/EntretiensPage'
 import LeaderboardPage from '@/pages/LeaderboardPage'
 import PortfolioPage from '@/pages/PortfolioPage'
 import AdminPage from '@/pages/admin/AdminPage'
@@ -53,6 +56,9 @@ export default function App() {
         <Route path="my-quests" element={<MyQuestsPage />} />
         <Route path="workspace/:assignmentId" element={<WorkspacePage />} />
         <Route path="leaderboard" element={<LeaderboardPage />} />
+        <Route path="offres" element={<OffresPage />} />
+        <Route path="offres/:id" element={<OffreDetailPage />} />
+        <Route path="entretiens" element={<EntretiensPage />} />
         <Route
           path="admin"
           element={

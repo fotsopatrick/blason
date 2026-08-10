@@ -8,13 +8,10 @@ export default function GoogleButton({ label }: { label: string }) {
 
   const handleGoogle = async () => {
     setLoading(true)
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    })
+    const { error } = await supabase.auth.signInWithOAuth()
     if (error) {
       toast.error(
-        "Google OAuth n'est pas configuré sur cette instance (voir README pour l'activer).",
+        'Version locale : la connexion se fait par email + mot de passe. Utilise le formulaire ci-dessous.',
       )
       setLoading(false)
     }

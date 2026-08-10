@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import type { LocalSession } from '@/lib/supabase'
 import type { Profile } from '@/lib/types'
 
 interface AuthState {
-  session: Session | null
-  user: User | null
+  session: LocalSession | null
+  user: { id: string; email: string } | null
   profile: Profile | null
   loading: boolean
   refreshProfile: () => Promise<void>
@@ -16,7 +16,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
+  const [session, setSession] = useState<LocalSession | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (_event, newSession) => {
         setSession(newSession)
         if (newSession?.user) {
-          // setTimeout pour éviter les deadlocks dans le callback supabase-js.
+          // setTimeout pour éviter les deadlocks dans le callback.
           setTimeout(() => fetchProfile(newSession.user.id), 0)
         } else {
           setProfile(null)
