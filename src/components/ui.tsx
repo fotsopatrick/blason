@@ -111,11 +111,12 @@ export function UserAvatar({
 export function SkillTags({ skills, max }: { skills: string[]; max?: number }) {
   const shown = max ? skills.slice(0, max) : skills
   const rest = max ? skills.length - shown.length : 0
+  const cut = (s: string) => (s.length > 28 ? `${s.slice(0, 27)}…` : s)
   return (
     <div className="flex flex-wrap gap-1.5">
       {shown.map((skill) => (
         <span key={skill} className="badge badge-outline badge-sm border-secondary/40 text-secondary">
-          {skill}
+          {cut(skill)}
         </span>
       ))}
       {rest > 0 && <span className="badge badge-ghost badge-sm">+{rest}</span>}

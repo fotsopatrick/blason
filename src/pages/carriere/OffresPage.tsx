@@ -57,6 +57,7 @@ export default function OffresPage() {
   const [url, setUrl] = useState('')
   const [nouveauDomaine, setNouveauDomaine] = useState('ia-agents')
   const [tags, setTags] = useState('')
+  const [notes, setNotes] = useState('')
 
   const { data: offres, isLoading, isError, refetch } = useQuery({
     queryKey: ['offres', user?.id],
@@ -82,8 +83,9 @@ export default function OffresPage() {
         tags: tags
           .split(',')
           .map((t) => t.trim())
-          .filter(Boolean),
-        notes: '',
+          .filter(Boolean)
+          .slice(0, 12),
+        notes: notes.trim(),
         created_by: user!.id,
       })
       if (error) throw error
@@ -95,6 +97,7 @@ export default function OffresPage() {
       setEntreprise('')
       setUrl('')
       setTags('')
+      setNotes('')
       void queryClient.invalidateQueries({ queryKey: ['offres'] })
       toast.success('Offre ajoutée à ton grimoire 📜')
     },
@@ -230,13 +233,23 @@ export default function OffresPage() {
             </label>
             <label className="form-control">
               <span className="label-text mb-1 text-sm">
-                Tags <span className="text-base-content/50">(séparés par des virgules)</span>
+                Tags <span className="text-base-content/50">(mots-clés courts, séparés par des virgules)</span>
               </span>
               <input
                 className="input input-bordered w-full"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                placeholder="agents, python, autogpt"
+                placeholder="agents, python, cloud"
+              />
+            </label>
+            <label className="form-control">
+              <span className="label-text mb-1 text-sm">Description de l'offre</span>
+              <textarea
+                className="textarea textarea-bordered w-full"
+                rows={5}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Colle ici la description du poste — elle restera sur la fiche de l'offre."
               />
             </label>
             <div className="modal-action">

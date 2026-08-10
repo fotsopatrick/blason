@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS quests (
   status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft','published','archived')),
   source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','ai')),
   job_posting TEXT,
+  offre_id TEXT REFERENCES offres(id) ON DELETE SET NULL,
   created_by TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

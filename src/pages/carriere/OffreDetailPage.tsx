@@ -18,6 +18,17 @@ type Offre = {
   created_at: string
 }
 
+type Quest = {
+  id: string
+  title: string
+  description: string
+  skills: string[]
+  status: string
+  offre_id: string | null
+  xp_reward: number
+  created_at: string
+}
+
 type RealisationEtat = 'brainstorming' | 'construction' | 'securite' | 'pret' | 'envoyee'
 
 type Realisation = {
@@ -236,20 +247,68 @@ export default function OffreDetailPage() {
     },
   })
 
+  const { data: questsOffre, isLoading: questsLoading } = useQuery({
+    queryKey: ['quests-offre', id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('quests')
+        .select('*')
+        .eq('offre_id', id!)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as Quest[]
+    },
+  })
+
   const launchMutation = useMutation({
     mutationFn: async () => {
+      // 1. Génère les quêtes de préparation depuis l'offre.
+      const { data: genData, error: genError } = await supabase.functions.invoke('generate-quest', {
+        body: { job_posting: `${offre?.titre ?? ''}\n${offre?.notes ?? ''}` },
+      })
+      if (genError) throw genError
+      const gen = genData as {
+        title: string
+        story: string
+        description: string
+        steps: { title: string; description: string }[]
+        skills: string[]
+        difficulty: string
+        estimated_hours: number
+        xp_reward: number
+      }
+      // 2. Crée la quête liée à l'offre.
+      const { data: questData, error: questError } = await supabase.from('quests').insert({
+        title: gen.title,
+        story: gen.story,
+        description: gen.description,
+        steps: gen.steps,
+        skills: gen.skills,
+        difficulty: gen.difficulty,
+        estimated_hours: gen.estimated_hours,
+        xp_reward: gen.xp_reward,
+        status: 'published',
+        source: 'ai',
+        job_posting: offre?.titre ?? '',
+        offre_id: id,
+        created_by: user!.id,
+      })
+      if (questError) throw questError
+      // 3. Crée la réalisation liée à l'offre.
       const { data, error } = await supabase.from('realisations').insert({
         offre_id: id,
         poste: offre?.titre ?? '',
-        etat: 'brainstorming',
+        etat: 'construction',
         created_by: user!.id,
       })
       if (error) throw error
-      return data[0] as Realisation | null
+      return { real: data[0] as Realisation | null, quest: questData[0] as Quest | null }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['realisations', id] })
-      toast.success('Réalisation lancée — à la forge ! ⚒️')
+      void queryClient.invalidateQueries({ queryKey: ['quests-offre', id] })
+      toast.success('Réalisation lancée — quêtes de préparation générées ! ⚒️')
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -322,6 +381,48 @@ export default function OffreDetailPage() {
           ) : (
             <p className="mt-3 text-sm text-base-content/60">
               Aucune réalisation pour l'instant. Lance la première pour ce poste.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="card mt-6 bg-base-100 shadow-sm">
+        <div className="card-body">
+          <h2 className="card-title text-base">⚔️ Quêtes de préparation</h2>
+          <p className="text-sm text-base-content/60">
+            Les quêtes générées depuis cette offre — chacune couvre une compétence demandée par le poste.
+          </p>
+          {questsLoading ? (
+            <LoadingState />
+          ) : questsOffre && questsOffre.length > 0 ? (
+            <div className="mt-3 flex flex-col gap-3">
+              {questsOffre.map((q) => (
+                <Link
+                  key={q.id}
+                  to={`/app/quests/${q.id}`}
+                  className="rounded-box border border-base-300 bg-base-100 p-3 transition-colors hover:border-primary/50"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">{q.title}</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="badge badge-sm badge-primary">{q.xp_reward} XP</span>
+                      <span className={`badge badge-sm ${q.status === 'published' ? 'badge-success' : 'badge-ghost'}`}>
+                        {q.status}
+                      </span>
+                    </div>
+                  </div>
+                  {q.skills.length > 0 && (
+                    <div className="mt-2">
+                      <SkillTags skills={q.skills} max={6} />
+                    </div>
+                  )}
+                  <p className="mt-2 line-clamp-2 text-sm text-base-content/70">{q.description}</p>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-base-content/60">
+              Aucune quête générée. Lance une réalisation pour les créer automatiquement.
             </p>
           )}
         </div>

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { supabase, setToken } from '@/lib/supabase'
 import { LoadingState } from '@/components/ui'
 
 // Cible du redirect OAuth (Google) : attend que la session soit établie puis route vers l'app.
@@ -9,6 +9,12 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     let done = false
+    const params = new URLSearchParams(window.location.search)
+    const accessToken = params.get('access_token')
+    if (accessToken) {
+      setToken(accessToken)
+      window.history.replaceState({}, '', '/auth/callback')
+    }
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session && !done) {
         done = true

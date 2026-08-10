@@ -309,10 +309,8 @@ const auth = {
     }
   },
   async signInWithOAuth() {
-    return {
-      data: null,
-      error: new Error('OAuth désactivé — version locale : email + mot de passe'),
-    }
+    window.location.href = '/api/auth/google'
+    return { data: null, error: null }
   },
 }
 

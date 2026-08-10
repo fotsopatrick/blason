@@ -28,6 +28,18 @@ const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000 // 30 jours
 
 fs.mkdirSync(STORAGE_DIR, { recursive: true })
 
+// Charger le .env du projet (sans dépendance) : GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET…
+const ENV_PATH = path.join(ROOT, '.env')
+if (fs.existsSync(ENV_PATH)) {
+  for (const raw of fs.readFileSync(ENV_PATH, 'utf8').split('\n')) {
+    const line = raw.replace(/\r$/, '')
+    const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)\s*$/)
+    if (m && !(m[1] in process.env)) {
+      process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, '')
+    }
+  }
+}
+
 const db = new DatabaseSync(DB_PATH)
 db.exec(fs.readFileSync(path.join(DATA_DIR, 'schema.sql'), 'utf8'))
 
@@ -52,12 +64,36 @@ function rowOut(r) {
   return out
 }
 
-const TOKENS = new Map() // token -> { user_id, exp }
+// Sessions par JWT signe (HMAC-SHA256) : contrairement a l'ancien Map en
+// memoire, les sessions survivent aux redemarrages du serveur (point de la
+// tache 1435, meme modele que Duelle). Le secret vit dans le .env.
+const JWT_SECRET = process.env.JWT_SECRET || ''
+if (!JWT_SECRET) {
+  console.error('JWT_SECRET manquant — les sessions ne peuvent pas etre emises. Ajoute-le au .env.')
+}
+function signJWT(payload) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const sig = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + body).digest('base64url')
+  return header + '.' + body + '.' + sig
+}
+function verifyJWT(token) {
+  try {
+    const parts = String(token || '').split('.')
+    if (parts.length !== 3) return null
+    const [h, b, s] = parts
+    const expect = crypto.createHmac('sha256', JWT_SECRET).update(h + '.' + b).digest('base64url')
+    if (s.length !== expect.length || !crypto.timingSafeEqual(Buffer.from(s), Buffer.from(expect))) return null
+    const payload = JSON.parse(Buffer.from(b, 'base64url').toString('utf8'))
+    if (payload.exp && payload.exp < Date.now()) return null
+    return payload
+  } catch {
+    return null
+  }
+}
 
 function issueToken(userId) {
-  const token = crypto.randomBytes(32).toString('hex')
-  TOKENS.set(token, { user_id: userId, exp: Date.now() + TOKEN_TTL_MS })
-  return token
+  return signJWT({ uid: userId, exp: Date.now() + TOKEN_TTL_MS })
 }
 
 function bearerToken(req) {
@@ -67,11 +103,11 @@ function bearerToken(req) {
 
 function auth(req) {
   const token = bearerToken(req)
-  const entry = token ? TOKENS.get(token) : null
-  if (!entry || entry.exp < Date.now()) return null
+  const payload = token ? verifyJWT(token) : null
+  if (!payload || !payload.uid) return null
   const profile = db
     .prepare('SELECT * FROM profiles WHERE id = ?')
-    .get(entry.user_id)
+    .get(payload.uid)
   if (!profile) return null
   return { token, user: profile, profile: rowOut(profile) }
 }
@@ -172,13 +208,94 @@ app.post('/api/auth/login', (req, res) => {
 })
 
 app.post('/api/auth/logout', requireAuth, (req, res) => {
-  const token = bearerToken(req)
-  if (token) TOKENS.delete(token)
   res.json({ ok: true })
 })
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ user: { id: req.auth.user.id, email: req.auth.user.email }, profile: req.auth.profile })
+})
+
+// ---------------------------------------------------------------------------
+// Google OAuth 2.0 (connexion avec un compte Gmail)
+// ---------------------------------------------------------------------------
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
+const GOOGLE_REDIRECT_URI =
+  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:8088/api/auth/google/callback'
+
+// 1) Redirige vers l'écran de consentement Google.
+app.get('/api/auth/google', (req, res) => {
+  if (!GOOGLE_CLIENT_ID)
+    return res.status(500).json({ message: 'GOOGLE_CLIENT_ID manquant (voir .env)' })
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: GOOGLE_REDIRECT_URI,
+    response_type: 'code',
+    scope: 'openid email profile',
+    prompt: 'select_account',
+    access_type: 'online',
+  })
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`)
+})
+
+// 2) Callback : échange le code contre un jeton Google, retrouve/crée l'utilisateur,
+//    émet le jeton QuestForge et ramène le navigateur sur /auth/callback.
+app.get('/api/auth/google/callback', async (req, res) => {
+  const code = req.query.code
+  const oauthError = req.query.error
+  if (oauthError)
+    return res.redirect('/login?google_error=' + encodeURIComponent(String(oauthError)))
+  if (!code) return res.status(400).json({ message: 'code d’autorisation manquant' })
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET)
+    return res.status(500).json({ message: 'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET manquants (voir .env)' })
+  try {
+    const tokRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: String(code),
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: GOOGLE_REDIRECT_URI,
+        grant_type: 'authorization_code',
+      }),
+    })
+    const tokJson = await tokRes.json()
+    if (!tokRes.ok)
+      throw new Error('échange du code refusé : ' + (tokJson.error_description || tokJson.error || tokRes.status))
+    const infoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokJson.access_token}` },
+    })
+    const g = await infoRes.json()
+    if (!infoRes.ok || !g.email)
+      throw new Error('profil Google illisible : ' + (g.error?.message || infoRes.status))
+
+    const email = String(g.email).toLowerCase()
+    let id = db.prepare('SELECT id FROM users WHERE email = ?').get(email)?.id
+    let createdProfile = false
+    if (!id) {
+      id = uuid()
+      db.prepare('INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)')
+        .run(id, email, '') // compte Google : pas de mot de passe local
+    }
+    if (!db.prepare('SELECT 1 FROM profiles WHERE id = ?').get(id)) {
+      const base = (email.split('@')[0] || 'hero').replace(/[^a-z0-9_]/g, '_').slice(0, 20) || 'hero'
+      let finalUname = base
+      let n = 0
+      while (db.prepare('SELECT id FROM profiles WHERE username = ?').get(finalUname)) {
+        n += 1
+        finalUname = base.slice(0, 14) + '_' + n
+      }
+      db.prepare('INSERT INTO profiles (id, username, display_name, avatar_url) VALUES (?, ?, ?, ?)')
+        .run(id, finalUname, g.name || finalUname, g.picture || null)
+      createdProfile = true
+    }
+    const questToken = issueToken(id)
+    res.redirect(`/auth/callback?access_token=${questToken}&new=${createdProfile ? 1 : 0}`)
+  } catch (e) {
+    console.error('Google OAuth :', e.message)
+    res.redirect('/login?google_error=' + encodeURIComponent(e.message))
+  }
 })
 
 // ---------------------------------------------------------------------------
@@ -543,22 +660,54 @@ app.get('/api/storage/:bucket/*splat', (req, res) => {
 })
 
 // ---------------------------------------------------------------------------
-// « Functions » : génération IA (provider local = pas de clé ; renvoie une
-// trame structurée déterministe, modifiable ensuite à la main).
+// « Functions » : génération IA (provider local = pas de clé ; extrait les
+// compétences du texte de l'offre et bâtit une quête structurée).
 // ---------------------------------------------------------------------------
+const SKILL_HINTS = [
+  ['azure', 'Azure'], ['aws', 'AWS'], ['gcp', 'Google Cloud'], ['kubernetes', 'Kubernetes'],
+  ['docker', 'Docker'], ['terraform', 'Terraform'], ['ansible', 'Ansible'], ['jenkins', 'Jenkins'],
+  ['kubernetes', 'Kubernetes'], ['python', 'Python'], ['typescript', 'TypeScript'],
+  ['javascript', 'JavaScript'], ['react', 'React'], ['node', 'Node.js'], ['odoo', 'Odoo'],
+  ['c#', 'C# / .NET'], ['.net', 'C# / .NET'], ['java', 'Java'], ['sql', 'SQL'],
+  ['postgres', 'PostgreSQL'], ['mysql', 'MySQL'], ['mongo', 'MongoDB'], ['linux', 'Linux'],
+  ['devops', 'DevOps'], ['ci/cd', 'CI/CD'], ['git', 'Git'], ['api', 'API'],
+  ['machine learning', 'Machine learning'], ['llm', 'LLM'], ['agents', 'Agents IA'],
+  ['artificial intelligence', 'IA'], ['intelligence artificielle', 'IA'],
+  ['agile', 'Agile'], ['scrum', 'Scrum'], ['powershell', 'PowerShell'],
+  ['bash', 'Bash'], ['cloud', 'Cloud'], ['security', 'Sécurité'], ['graphql', 'GraphQL'],
+  ['flask', 'Flask'], ['django', 'Django'], ['vue', 'Vue.js'], ['flutter', 'Flutter'],
+  ['redis', 'Redis'], ['rabbitmq', 'RabbitMQ'], ['prometheus', 'Prometheus'],
+  ['grafana', 'Grafana'], ['nginx', 'Nginx'], ['caddy', 'Caddy'],
+]
+
+function extraireCompetences(texte) {
+  const bas = String(texte || '').toLowerCase()
+  const trouves = []
+  for (const [motif, nom] of SKILL_HINTS) {
+    if (bas.includes(motif) && !trouves.includes(nom)) trouves.push(nom)
+  }
+  return trouves.slice(0, 6)
+}
+
 app.post('/api/functions/generate-quest', requireAuth, (req, res) => {
   const job = req.body?.job_posting || req.body?.jobPosting || ''
-  const skills = (req.body?.skills || []).map(String)
-  const titre = (job ? job.trim().slice(0, 60) : 'Maîtrise — ' + (skills[0] || 'compétence')) || 'Nouvelle quête'
+  const skillsDemandees = (req.body?.skills || []).map(String)
+  const titreTxt = String(job).replace(/\s+/g, ' ').trim()
+  const titre = (titreTxt ? titreTxt.slice(0, 70) : 'Maîtrise — ' + (skillsDemandees[0] || 'compétence')) || 'Nouvelle quête'
+  const competences = extraireCompetences(job).concat(
+    skillsDemandees.filter((s) => !extraireCompetences(job).includes(s)),
+  ).slice(0, 6)
+  const cibles = competences.length ? competences : ['les fondamentaux du poste']
+  const etapes = cibles.slice(0, 3).map((c) => ({
+    title: 'Maîtriser — ' + c,
+    description: 'Ressource : le manuel officiel ou la documentation de ' + c + '. Lis-la, note les 5 points clés, applique-les dans un mini-exercice.',
+  }))
   const q = {
     title: titre,
-    story: `Une offre est tombée : ${job || 'un poste'}. Pour y répondre, il faut maîtriser ce qui est demandé.`,
-    description: 'Quête générée localement (sans clé API). Adapte les étapes à la compétence visée.',
-    steps: skills.slice(0, 4).map((s) => ({
-      title: 'Maîtriser — ' + s,
-      description: 'Trouve une ressource sur ' + s + ', lis-la, résume-la en 5 lignes.',
-    })),
-    skills,
+    story: 'Une offre est tombée : « ' + (titreTxt || 'un poste') + ' ». Pour y répondre, il faut prouver par l’action ce que l’on maîtrise.',
+    description: 'Quête générée depuis l’offre, sans clé API : chaque étape prépare une compétence demandée par le poste.',
+    steps: etapes,
+    skills: cibles,
     resources: [],
     difficulty: 'intermediate',
     estimated_hours: 8,
