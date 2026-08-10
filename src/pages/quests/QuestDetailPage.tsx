@@ -14,6 +14,7 @@ import {
 } from '@/components/ui'
 import { SUBMISSION_STATUS_LABELS, formatDate, formatRelative } from '@/lib/format'
 import type { Quest, QuestAssignment, Submission } from '@/lib/types'
+import QuestCinematic from '@/components/quests/QuestCinematic'
 
 type SubmissionWithContext = Submission & {
   quest_assignments: QuestAssignment
@@ -227,6 +228,7 @@ export default function QuestDetailPage() {
       </Link>
 
       <div className="card bg-base-100 shadow-sm">
+        <QuestCinematic quest={quest} />
         <div className="card-body">
           <div className="flex flex-wrap items-center gap-2">
             <DifficultyBadge difficulty={quest.difficulty} />
@@ -239,12 +241,16 @@ export default function QuestDetailPage() {
           </div>
 
           <h1 className="font-display mt-2 text-2xl font-bold leading-tight">{quest.title}</h1>
-          {quest.story && (
-            <p className="border-l-4 border-accent pl-3 text-sm italic text-base-content/70">
-              {quest.story}
-            </p>
-          )}
           <p className="mt-2 whitespace-pre-wrap text-base-content/80">{quest.description}</p>
+
+          {quest.story && (
+            <details className="rounded-box border border-base-300 bg-base-200/40 p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-base-content/70">
+                📜 L'histoire racontée
+              </summary>
+              <p className="mt-2 whitespace-pre-wrap text-sm italic text-base-content/70">{quest.story}</p>
+            </details>
+          )}
 
           <h2 className="mt-4 font-semibold">🗺️ Étapes de la quête</h2>
           <ol className="flex flex-col gap-3">

@@ -1,6 +1,7 @@
 import { Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthContext'
+import AmbientBackdrop from '@/components/AmbientBackdrop'
 
 const FEATURES = [
   {
@@ -47,26 +48,28 @@ export default function LandingPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4">
-        <section className="py-16 text-center sm:py-24">
+        <section className="relative overflow-hidden py-16 text-center sm:py-24">
+          <AmbientBackdrop className="absolute inset-0 h-full w-full" />
           <motion.div
+            className="relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
             <div className="mb-4 text-6xl">⚔️</div>
-            <h1 className="font-display mx-auto max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">
-              Transforme les offres d’emploi en <span className="text-primary">quêtes épiques</span>
+            <h1 className="font-display mx-auto max-w-3xl text-4xl font-bold leading-tight text-amber-100 sm:text-5xl">
+              Transforme les offres d’emploi en <span className="text-amber-400">quêtes épiques</span>
             </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-lg text-base-content/70">
+            <p className="mx-auto mt-5 max-w-2xl text-lg text-white/75">
               QuestForge transforme les compétences que le marché réclame en projets concrets.
               Forme ta guilde, complète des quêtes, gagne de l’XP et forge un portfolio
               qui prouve ce que tu sais faire.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link to="/register" className="btn btn-primary btn-lg">
+              <Link to="/register" className="btn btn-accent btn-lg text-neutral-900">
                 ⚒️ Rejoindre la forge
               </Link>
-              <Link to="/login" className="btn btn-outline btn-lg">
+              <Link to="/login" className="btn btn-outline btn-lg border-white/25 text-white hover:bg-white/10">
                 J’ai déjà un compte
               </Link>
             </div>

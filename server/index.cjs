@@ -301,9 +301,27 @@ app.get('/api/auth/google/callback', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Table générique (le « from('table').select().eq().order() » du front)
 // ---------------------------------------------------------------------------
+function splitSelectParts(s) {
+  const parts = []
+  let depth = 0
+  let cur = ''
+  for (const ch of s) {
+    if (ch === '(') depth += 1
+    else if (ch === ')') depth = Math.max(0, depth - 1)
+    if (ch === ',' && depth === 0) {
+      parts.push(cur.trim())
+      cur = ''
+    } else {
+      cur += ch
+    }
+  }
+  if (cur.trim()) parts.push(cur.trim())
+  return parts
+}
+
 function parseSelect(selectStr) {
   if (!selectStr || selectStr === '*') return { cols: '*', rels: [] }
-  const parts = selectStr.split(',').map((s) => s.trim())
+  const parts = splitSelectParts(selectStr)
   const rels = []
   const cols = []
   for (const p of parts) {
