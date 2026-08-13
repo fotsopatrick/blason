@@ -645,29 +645,60 @@ function installer(app, db, deps) {
   })
 
   // ---- la réponse : correction, XP, SRS, série -------------------------
+  // Retrouver un exercice dans la banque a partir de son identifiant.
+  // JAMAIS depuis le corps de la requete : le client ne doit pas pouvoir se
+  // fabriquer un exercice, ni se noter lui-meme.
+  function trouverExercice(uid, exId) {
+    for (const s of cur.competencesConnues()) {
+      const t = cur.exercicesPour(s).find((e) => e.id === exId)
+      if (t) return t
+    }
+    // Exercice generique : sa competence n'est pas dans la banque, on la
+    // retrouve par les parcours de l'utilisateur.
+    const p = q('SELECT * FROM parcours WHERE user_id = ? ORDER BY created_at DESC LIMIT 20').all(uid)
+    for (const row of p) {
+      for (const c of JSON.parse(row.competences)) {
+        const t = cur.exercicesPour(c.nom).find((e) => e.id === exId)
+        if (t) return t
+      }
+    }
+    return null
+  }
+
+  // LA GRILLE DU JURY (ajoute le 13/08/2026).
+  //
+  // Les exercices de type design et star se notent sur grille : l'apprenant
+  // repond a voix haute, PUIS decouvre les criteres et coche honnetement ce
+  // qu'il a reellement dit.
+  //
+  // La premiere version n'envoyait jamais le texte des criteres. L'ecran
+  // affichait « Critere 1 » a « Critere 5 », des cases a cocher sans
+  // libelle : impossible de s'auto-evaluer contre des criteres invisibles.
+  // L'exercice etait inutilisable.
+  //
+  // La grille n'est donc PAS dans la seance — sinon on la lit avant de
+  // reflechir, et on recopie au lieu de chercher — mais elle se demande, au
+  // moment ou l'apprenant declare avoir repondu. C'est lui qui decide quand
+  // lever le voile ; l'honnetete de l'auto-evaluation lui appartient.
+  app.get('/api/seance/grille', requireAuth, (req, res) => {
+    const ex = trouverExercice(req.auth.profile.id, String(req.query.exercice_id || ''))
+    if (!ex) return res.status(404).json({ message: 'Exercice inconnu' })
+    if (ex.type !== 'design' && ex.type !== 'star') {
+      return res.status(400).json({ message: 'Cet exercice ne se note pas sur grille.' })
+    }
+    res.json({
+      exercice_id: ex.id,
+      grille: ex.grille,
+      seuil: ex.seuil || Math.ceil(ex.grille.length / 2),
+    })
+  })
+
   app.post('/api/seance/reponse', requireAuth, (req, res) => {
     const uid = req.auth.profile.id
     const exId = String(req.body?.exercice_id || '')
     if (!exId) return res.status(400).json({ message: 'exercice_id requis' })
 
-    // Retrouver l'exercice dans la banque (jamais dans le corps de la requête :
-    // le client ne doit pas pouvoir se noter lui-même).
-    let ex = null
-    for (const s of cur.competencesConnues()) {
-      const t = cur.exercicesPour(s).find((e) => e.id === exId)
-      if (t) { ex = t; break }
-    }
-    if (!ex) {
-      // Exercice générique : on retrouve la compétence par le prefixe de l'id.
-      const p = q('SELECT * FROM parcours WHERE user_id = ? ORDER BY created_at DESC LIMIT 20').all(uid)
-      for (const row of p) {
-        for (const c of JSON.parse(row.competences)) {
-          const t = cur.exercicesPour(c.nom).find((e) => e.id === exId)
-          if (t) { ex = t; break }
-        }
-        if (ex) break
-      }
-    }
+    const ex = trouverExercice(uid, exId)
     if (!ex) return res.status(404).json({ message: 'Exercice inconnu' })
 
     const r = rythme(uid)

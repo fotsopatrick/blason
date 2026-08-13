@@ -702,36 +702,57 @@
   }
 
   function montrerGrille(ex, zone, bouton, note) {
-    bouton.remove(); note.remove();
-    S.rep = [];
-    var titre = document.createElement('p');
-    titre.style.cssText = 'font-weight:800;margin-bottom:12px;color:#e8b64c;font-size:13px;letter-spacing:1px;text-transform:uppercase';
-    titre.textContent = 'La grille du jury — coche ce que tu as dit';
-    zone.appendChild(titre);
-    // On demande la grille au serveur en meme temps que la correction :
-    // ici on affiche des cases numerotees, le libelle arrive avec le verdict.
-    // Pour rester utile hors ligne, on affiche des cases generiques.
-    for (var i = 0; i < ex.nb_criteres; i++) {
-      (function (idx) {
+    bouton.disabled = true;
+    bouton.textContent = 'Ouverture de la grille…';
+    // LE TEXTE DES CRITERES VIENT DU SERVEUR, ICI SEULEMENT.
+    //
+    // Il n'est pas dans la séance : on le lirait avant de réfléchir, et on
+    // recopierait au lieu de chercher. Mais il DOIT arriver au moment où
+    // l'apprenant déclare avoir répondu — la première version affichait
+    // « Critère 1 » à « Critère 5 » sans libellé, ce qui rendait
+    // l'auto-évaluation impossible et l'exercice inutilisable.
+    api('/seance/grille?exercice_id=' + encodeURIComponent(ex.id)).then(function (g) {
+      bouton.remove(); note.remove();
+      S.rep = [];
+      var titre = document.createElement('p');
+      titre.style.cssText = 'font-weight:800;margin-bottom:6px;color:#e8b64c;font-size:13px;'
+        + 'letter-spacing:1px;text-transform:uppercase';
+      titre.textContent = 'La grille du jury';
+      zone.appendChild(titre);
+
+      var sous = document.createElement('p');
+      sous.style.cssText = 'color:#9aa7bd;font-size:14px;margin-bottom:14px;line-height:1.55';
+      sous.innerHTML = 'Coche ce que tu as <b>réellement</b> dit — pas ce que tu aurais pu dire. '
+        + 'Le jury en attend <b>' + g.seuil + ' sur ' + g.grille.length + '</b> pour valider.';
+      zone.appendChild(sous);
+
+      g.grille.forEach(function (libelle, idx) {
         var d = document.createElement('div');
         d.className = 'critere';
-        d.innerHTML = '<span class="case"></span><span>Critère ' + (idx + 1) + '</span>';
+        var c = document.createElement('span'); c.className = 'case';
+        var t = document.createElement('span'); t.textContent = libelle;
+        d.appendChild(c); d.appendChild(t);
         d.onclick = function () {
           if (S.corrige) return;
           d.classList.toggle('coche');
           S.rep[idx] = d.classList.contains('coche');
-          d.querySelector('.case').textContent = d.classList.contains('coche') ? '✓' : '';
+          c.textContent = d.classList.contains('coche') ? '✓' : '';
           $('sValider').disabled = false;
         };
         zone.appendChild(d);
-      })(i);
-    }
-    var aide = document.createElement('p');
-    aide.style.cssText = 'color:#7d8ba4;font-size:13px;margin-top:12px;line-height:1.55';
-    aide.textContent = "Le détail de chaque critère s'affiche après validation : la grille sert à "
-      + "te corriger, pas à te souffler la réponse.";
-    zone.appendChild(aide);
-    $('sValider').disabled = false;
+      });
+
+      var aide = document.createElement('p');
+      aide.style.cssText = 'color:#7d8ba4;font-size:13px;margin-top:14px;line-height:1.55';
+      aide.textContent = "Personne ne vérifie tes cases : c'est toi que tu trompes en trichant. "
+        + "Les critères que tu n'as pas cochés sont exactement ce qu'il te reste à travailler.";
+      zone.appendChild(aide);
+      $('sValider').disabled = false;
+    }).catch(function (e) {
+      bouton.disabled = false;
+      bouton.textContent = "J'ai répondu — montrer la grille";
+      erreur(e);
+    });
   }
 
   function onValider() {
