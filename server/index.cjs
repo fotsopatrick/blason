@@ -17,6 +17,25 @@ const crypto = require('node:crypto')
 const fs = require('node:fs')
 const path = require('node:path')
 
+// LE FICHIER DE CONFIGURATION — corrige le 13/08/2026.
+//
+// Il n'etait charge NULLE PART. En production ca ne se voyait pas :
+// systemd fournit les variables par EnvironmentFile. Mais quiconque
+// clonait le depot creait son fichier comme le disait le README... et
+// il etait ignore en silence. Le jeton de signature restait vide, et
+// une cle HMAC vide veut dire que n'importe qui peut se fabriquer une
+// session valide.
+//
+// process.loadEnvFile existe dans Node 22+, que le projet exige deja :
+// aucune dependance a ajouter.
+try {
+  process.loadEnvFile(path.join(__dirname, '..', '.env'))
+} catch {
+  // Absent : normal en production, ou les variables viennent de
+  // systemd. On ne dit rien ici ; le controle du jeton, plus bas,
+  // refusera de demarrer si l'essentiel manque vraiment.
+}
+
 const PORT = process.env.PORT || 8088
 const HOST = process.env.HOST || '0.0.0.0'
 const ROOT = path.resolve(__dirname, '..')
@@ -73,7 +92,25 @@ function rowOut(r) {
 // tache 1435, meme modele que Duelle). Le secret vit dans le .env.
 const JWT_SECRET = process.env.JWT_SECRET || ''
 if (!JWT_SECRET) {
-  console.error('JWT_SECRET manquant — les sessions ne peuvent pas etre emises. Ajoute-le au .env.')
+  // ON REFUSE DE DEMARRER (13/08/2026).
+  //
+  // Avant, on affichait une erreur et on continuait. Le serveur tournait
+  // donc avec une cle de signature VIDE : n'importe qui pouvait forger un
+  // jeton de session et se faire passer pour un autre. Un avertissement
+  // dans la console ne protege personne : il defile et on l'oublie.
+  //
+  // Une regle ecrite n'est pas suivie ; une regle codee l'est.
+  console.error('')
+  console.error('  DEMARRAGE REFUSE : le jeton de signature est vide.')
+  console.error('')
+  console.error('  Il signe les sessions. Sans lui, les jetons ne seraient')
+  console.error("  pas signes, et n'importe qui pourrait s'en fabriquer un.")
+  console.error('')
+  console.error("  1. copie le fichier d'exemple a la racine")
+  console.error('  2. genere la valeur :  openssl rand -base64 48')
+  console.error('  3. colle-la sur la ligne JWT_SECRET=')
+  console.error('')
+  process.exit(1)
 }
 function signJWT(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
