@@ -3,11 +3,11 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { UserAvatar, XPBar } from '@/components/ui'
 
-const THEME_KEY = 'questforge-theme'
+const THEME_KEY = 'blason-theme'
 
 function ThemeToggle() {
   const [theme, setTheme] = useState<string>(
-    () => localStorage.getItem(THEME_KEY) ?? 'questforge',
+    () => localStorage.getItem(THEME_KEY) ?? 'blason',
   )
 
   useEffect(() => {
@@ -15,12 +15,12 @@ function ThemeToggle() {
     localStorage.setItem(THEME_KEY, theme)
   }, [theme])
 
-  const dark = theme === 'questforgenight'
+  const dark = theme === 'blasonnuit'
   return (
     <button
       className="btn btn-ghost btn-circle"
       title={dark ? 'Thème clair' : 'Thème sombre'}
-      onClick={() => setTheme(dark ? 'questforge' : 'questforgenight')}
+      onClick={() => setTheme(dark ? 'blason' : 'blasonnuit')}
     >
       {dark ? '🌞' : '🌙'}
     </button>
@@ -95,7 +95,7 @@ export default function AppLayout() {
           </div>
           <div className="flex-1">
             <NavLink to="/app" className="btn btn-ghost text-lg font-display font-bold lg:hidden">
-              ⚔️ QuestForge
+              ⚔️ Blason
             </NavLink>
           </div>
           <div className="flex items-center gap-1">
@@ -126,7 +126,7 @@ export default function AppLayout() {
         </main>
 
         <footer className="border-t border-base-300 py-4 text-center text-xs text-base-content/50">
-          QuestForge — forge tes compétences, quête après quête.
+          Blason — bâtis tes armes, quête après quête.
         </footer>
       </div>
 
@@ -136,7 +136,7 @@ export default function AppLayout() {
         <aside className="flex min-h-full w-64 flex-col border-r border-base-300 bg-base-100 p-4">
           <NavLink to="/app" className="mb-6 flex items-center gap-2 px-2">
             <span className="text-2xl">⚔️</span>
-            <span className="font-display text-xl font-bold tracking-wide">QuestForge</span>
+            <span className="font-display text-xl font-bold tracking-wide">Blason</span>
           </NavLink>
 
           {profile && (

@@ -1,4 +1,4 @@
-// QuestForge — mise en scène des quêtes.
+// Blason — mise en scène des quêtes.
 // Une quête (forgée depuis une offre d'emploi) devient une courte scène :
 // un biome sombre déduit des compétences demandées, un gardien qui parle,
 // et le récit de la quête raconté en dialogues.

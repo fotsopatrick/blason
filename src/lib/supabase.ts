@@ -9,6 +9,8 @@ const BASE = import.meta.env.VITE_API_URL ?? '/api'
 // ---------------------------------------------------------------------------
 // Transport
 // ---------------------------------------------------------------------------
+// Cle inchangee EXPRES (renommage Blason, 13/08/2026) : la renommer
+// deconnecterait d'un coup tous les utilisateurs deja connectes.
 const TOKEN_KEY = 'questforge-token'
 
 export function getToken(): string | null {

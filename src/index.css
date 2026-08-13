@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 @plugin "daisyui" {
-  themes: questforge --default, questforgenight --prefersdark;
+  themes: blason --default, blasonnuit --prefersdark;
 }
 
 /* Thème clair : parchemin, violet profond, or — fantasy léger. */
 @plugin "daisyui/theme" {
-  name: "questforge";
+  name: "blason";
   default: true;
   color-scheme: light;
   --color-base-100: oklch(97.5% 0.013 84);
@@ -41,7 +41,7 @@
 
 /* Thème sombre : nuit d'encre violette, braises dorées. */
 @plugin "daisyui/theme" {
-  name: "questforgenight";
+  name: "blasonnuit";
   prefersdark: true;
   color-scheme: dark;
   --color-base-100: oklch(22% 0.035 292);

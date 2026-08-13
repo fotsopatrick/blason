@@ -88,7 +88,7 @@ export default function PortfolioPage() {
         <div className="flex-1">
           <Link to="/" className="flex items-center gap-2 px-2">
             <span className="text-2xl">⚔️</span>
-            <span className="font-display text-lg font-bold">QuestForge</span>
+            <span className="font-display text-lg font-bold">Blason</span>
           </Link>
         </div>
         <Link to={session ? '/app' : '/register'} className="btn btn-primary btn-sm">

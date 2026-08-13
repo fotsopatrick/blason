@@ -42,7 +42,7 @@ export default function LoginPage() {
         <div className="card-body">
           <Link to="/" className="mb-2 flex items-center justify-center gap-2">
             <span className="text-3xl">⚔️</span>
-            <span className="font-display text-2xl font-bold">QuestForge</span>
+            <span className="font-display text-2xl font-bold">Blason</span>
           </Link>
           <h1 className="text-center text-lg font-semibold">La forge t’attend, aventurier·ère</h1>
 

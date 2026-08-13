@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * QuestForge — serveur local (Express + SQLite natif Node).
+ * Blason — serveur local (Express + SQLite natif Node).
  * Remplaçant de Supabase : zéro clé, zéro compte, zéro paiement.
  *
  * Sert :
@@ -9,7 +9,7 @@
  *    RPC (join_guild, review_submission, leaderboards, admin_stats),
  *    storage (avatars, deliverables), realtime polling (guild_messages).
  *
- * Base : server/questforge.db (créée au premier démarrage).
+ * Base : server/blason.db (créée au premier démarrage).
  */
 const express = require('express')
 const { DatabaseSync } = require('node:sqlite')
@@ -22,7 +22,7 @@ const HOST = process.env.HOST || '0.0.0.0'
 const ROOT = path.resolve(__dirname, '..')
 const DIST = path.join(ROOT, 'dist')
 const DATA_DIR = path.join(__dirname)
-const DB_PATH = path.join(DATA_DIR, 'questforge.db')
+const DB_PATH = path.join(DATA_DIR, 'blason.db')
 const STORAGE_DIR = path.join(DATA_DIR, 'storage')
 const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000 // 30 jours
 
@@ -48,6 +48,10 @@ db.exec(fs.readFileSync(path.join(DATA_DIR, 'schema.sql'), 'utf8'))
 // ---------------------------------------------------------------------------
 const uuid = () => crypto.randomUUID()
 const hash = (pwd) =>
+  // Le sel garde son ancien nom EXPRES (renommage Blason, 13/08/2026) :
+  // le changer recalculerait toutes les empreintes et rendrait chaque
+  // compte existant inaccessible, avec pour seul message « mot de passe
+  // incorrect ». Un renommage cosmetique ne casse pas un etat stocke.
   crypto.scryptSync(pwd, 'questforge-sel', 32).toString('hex')
 
 // Sérialiser les enregistrements : JSON pour les colonnes texte en JSON.
@@ -239,7 +243,7 @@ app.get('/api/auth/google', (req, res) => {
 })
 
 // 2) Callback : échange le code contre un jeton Google, retrouve/crée l'utilisateur,
-//    émet le jeton QuestForge et ramène le navigateur sur /auth/callback.
+//    émet le jeton Blason et ramène le navigateur sur /auth/callback.
 app.get('/api/auth/google/callback', async (req, res) => {
   const code = req.query.code
   const oauthError = req.query.error
@@ -782,6 +786,6 @@ app.use((req, res, next) => {
 })
 
 app.listen(PORT, HOST, () => {
-  console.log(`QuestForge local → http://localhost:${PORT}`)
+  console.log(`Blason local → http://localhost:${PORT}`)
   console.log(`Base SQLite : ${DB_PATH}`)
 })

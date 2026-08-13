@@ -38,7 +38,7 @@ export default function LandingPage() {
         <div className="flex-1">
           <span className="flex items-center gap-2 px-2">
             <span className="text-2xl">⚔️</span>
-            <span className="font-display text-xl font-bold">QuestForge</span>
+            <span className="font-display text-xl font-bold">Blason</span>
           </span>
         </div>
         <div className="flex gap-2">
@@ -61,7 +61,7 @@ export default function LandingPage() {
               Transforme les offres d’emploi en <span className="text-amber-400">quêtes épiques</span>
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-lg text-white/75">
-              QuestForge transforme les compétences que le marché réclame en projets concrets.
+              Blason transforme les compétences que le marché réclame en projets concrets.
               Forme ta guilde, complète des quêtes, gagne de l’XP et forge un portfolio
               qui prouve ce que tu sais faire.
             </p>
@@ -97,7 +97,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-base-300 py-6 text-center text-sm text-base-content/50">
-        QuestForge — apprends en héros.
+        Blason — apprends en héros.
       </footer>
     </div>
   )
