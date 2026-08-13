@@ -1,0 +1,15 @@
+# Secrets — GOOGLE_CLIENT_SECRET et JWT_SECRET vivent ici. Jamais versionné.
+.env
+
+# Dépendances
+node_modules/
+
+# Bases SQLite : données réelles, et elles se recréent au premier démarrage.
+server/*.db
+server/*.db-journal
+server/*.db-wal
+server/storage/
+
+# Sauvegardes horodatées prises à la main pendant les sessions.
+*.avant-*
+dist.avant-*/
