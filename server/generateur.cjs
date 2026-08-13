@@ -35,22 +35,57 @@ const Anthropic = require('@anthropic-ai/sdk')
 const Client = Anthropic.default || Anthropic
 
 // ---------------------------------------------------------------------------
-// Configuration
+// CHAQUE UTILISATEUR SA CLÉ (corrigé le 13/08/2026)
+//
+// La première version lisait BLASON_IA_CLE dans l'environnement du serveur.
+// Sur une instance publique — et Blason en est une — cela veut dire UNE SEULE
+// clé pour tout le monde : n'importe qui crée un compte et consomme le crédit
+// du propriétaire du serveur. Ce n'est pas une option de configuration
+// discutable, c'est un trou.
+//
+// La clé vient donc de l'appelant, qui la tient du compte de l'utilisateur
+// (chiffrée au repos, voir moteur.cjs). Le serveur n'en détient aucune.
+//
+// UNE SEULE exception, explicite et fermée par défaut : une installation
+// personnelle mono-utilisateur peut poser BLASON_IA_CLE **et**
+// BLASON_IA_CLE_PARTAGEE=oui. Il faut les DEUX. Une clé seule ne suffit pas,
+// précisément pour qu'on ne partage jamais son crédit par inadvertance en
+// recopiant une ligne de configuration.
 // ---------------------------------------------------------------------------
-// BLASON_IA_CLE est le nom propre au projet ; à défaut, le SDK résout
-// ANTHROPIC_API_KEY tout seul. On accepte les deux pour ne pas obliger
-// quelqu'un qui a déjà la variable standard à en créer une autre.
-const CLE = process.env.BLASON_IA_CLE || process.env.ANTHROPIC_API_KEY || ''
 const MODELE = process.env.BLASON_IA_MODELE || 'claude-opus-5'
+const CLE_PARTAGEE =
+  process.env.BLASON_IA_CLE_PARTAGEE === 'oui'
+    ? (process.env.BLASON_IA_CLE || process.env.ANTHROPIC_API_KEY || '')
+    : ''
 
-function disponible() {
-  return Boolean(CLE)
+// La clé de secours vaut pour tout le monde : on ne la sert que si elle a été
+// explicitement partagée.
+function cleDeSecours() {
+  return CLE_PARTAGEE
 }
 
-let client = null
-function obtenirClient() {
-  if (!client) client = new Client({ apiKey: CLE })
-  return client
+// Un client par clé, gardé en mémoire : reconstruire un client à chaque appel
+// jetterait le pool de connexions. La Map est bornée — sur une instance
+// publique, un client par compte finirait par peser.
+const clients = new Map()
+const CLIENTS_MAX = 50
+function obtenirClient(cle) {
+  if (!cle) {
+    const e = new Error(
+      "Aucune clé d'API pour ce compte. Renseigne la tienne dans ton profil : "
+      + "elle reste chiffrée, n'est jamais renvoyée, et seule TA clé paie TES "
+      + 'générations. Sans clé, Blason fonctionne en génération simple.',
+    )
+    e.nonConfigure = true
+    throw e
+  }
+  let c = clients.get(cle)
+  if (!c) {
+    if (clients.size >= CLIENTS_MAX) clients.delete(clients.keys().next().value)
+    c = new Client({ apiKey: cle })
+    clients.set(cle, c)
+  }
+  return c
 }
 
 // ---------------------------------------------------------------------------
@@ -205,12 +240,12 @@ function verifier(ex) {
  *                             ou « Qualité » pourrait signifier n'importe quoi.
  * @param {number} combien     nombre d'exercices visé (borné 3–8)
  */
-async function generer(competence, contexte, combien) {
-  if (!disponible()) {
+async function generer(cle, competence, contexte, combien) {
+  if (!cle) {
     const e = new Error(
       "La génération n'est pas configurée : aucune clé d'API. "
-      + "Renseigne BLASON_IA_CLE dans le fichier .env (voir .env.example). "
-      + 'Sans clé, Blason continue de fonctionner avec ses banques écrites à la main.',
+      + "Renseigne la tienne dans ton profil — elle reste chiffrée et n'est jamais renvoyée. "
+      + 'Sans clé, Blason continue en génération simple : banques écrites à la main et fiche générique.',
     )
     e.nonConfigure = true
     throw e
@@ -232,7 +267,7 @@ async function generer(competence, contexte, combien) {
     'Si la compétence ne se prête pas à un ordre de grandeur fiable, omets ce type plutôt que d inventer un chiffre.',
   ].filter(Boolean).join('\n')
 
-  const reponse = await obtenirClient().messages.create({
+  const reponse = await obtenirClient(cle).messages.create({
     model: MODELE,
     max_tokens: 16000,
     // Pensée adaptative : ces exercices demandent de raisonner sur un métier,
@@ -362,13 +397,13 @@ Réponds uniquement selon le schéma fourni.`
  * Lève une erreur si aucune clé n'est configurée — l'appelant retombe alors
  * sur le comptage pondéré de mots-clés.
  */
-async function extraireIA(texte, titre) {
-  if (!disponible()) {
+async function extraireIA(cle, texte, titre) {
+  if (!cle) {
     const e = new Error('Génération non configurée')
     e.nonConfigure = true
     throw e
   }
-  const reponse = await obtenirClient().messages.create({
+  const reponse = await obtenirClient(cle).messages.create({
     model: MODELE,
     max_tokens: 4000,
     thinking: { type: 'adaptive' },
@@ -421,4 +456,4 @@ async function extraireIA(texte, titre) {
   }
 }
 
-module.exports = { generer, extraireIA, disponible, verifier, MODELE }
+module.exports = { generer, extraireIA, verifier, cleDeSecours, obtenirClient, MODELE }

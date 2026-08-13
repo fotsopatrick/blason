@@ -40,7 +40,20 @@ const PORT = process.env.PORT || 8088
 const HOST = process.env.HOST || '0.0.0.0'
 const ROOT = path.resolve(__dirname, '..')
 const DIST = path.join(ROOT, 'dist')
-const DATA_DIR = path.join(__dirname)
+// OÙ VIVENT LES DONNÉES (13/08/2026).
+//
+// Par défaut, à côté du code — c'est le comportement historique, et il
+// convient à une installation locale.
+//
+// En conteneur, c'est faux : le système de fichiers de l'image est monté en
+// LECTURE SEULE (voir Dockerfile et compose), et tout ce qui y serait écrit
+// disparaîtrait au premier redéploiement. BLASON_DONNEES pointe alors vers
+// le volume — le seul endroit inscriptible, et le seul qui survit.
+//
+// Le schéma SQL, lui, reste TOUJOURS près du code : c'est de la lecture, il
+// fait partie de l'application et non de ses données.
+const DATA_DIR = process.env.BLASON_DONNEES || path.join(__dirname)
+const CODE_DIR = path.join(__dirname)
 const DB_PATH = path.join(DATA_DIR, 'blason.db')
 const STORAGE_DIR = path.join(DATA_DIR, 'storage')
 const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000 // 30 jours
@@ -60,7 +73,7 @@ if (fs.existsSync(ENV_PATH)) {
 }
 
 const db = new DatabaseSync(DB_PATH)
-db.exec(fs.readFileSync(path.join(DATA_DIR, 'schema.sql'), 'utf8'))
+db.exec(fs.readFileSync(path.join(CODE_DIR, 'schema.sql'), 'utf8'))
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -115,6 +115,30 @@ CREATE TABLE IF NOT EXISTS exercices_generes (
 );
 CREATE INDEX IF NOT EXISTS idx_gen_skill ON exercices_generes (skill);
 
+-- La clé d'API de chaque utilisateur, CHIFFRÉE.
+--
+-- Elle n'est jamais stockée en clair : quiconque lirait le fichier de base —
+-- une sauvegarde égarée, un accès disque, une copie envoyée pour dépannage —
+-- repartirait sinon avec la clé de facturation de chaque compte.
+--
+-- Chiffrement AES-256-GCM. Le GCM authentifie en plus de chiffrer : une
+-- valeur modifiée en base est refusée au déchiffrement au lieu de rendre
+-- n'importe quoi. La clé de chiffrement dérive de JWT_SECRET, déjà
+-- obligatoire — aucun secret de plus à gérer, et aucune excuse pour ne pas
+-- chiffrer.
+--
+-- La colonne « suffixe » garde les 4 derniers caractères, EN CLAIR et volontairement :
+-- l'utilisateur doit pouvoir reconnaître quelle clé il a posée sans qu'on la
+-- lui rende. Quatre caractères ne permettent de retrouver aucune clé.
+CREATE TABLE IF NOT EXISTS cles_ia (
+  user_id TEXT PRIMARY KEY,
+  chiffre TEXT NOT NULL,
+  iv TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  suffixe TEXT NOT NULL DEFAULT '',
+  maj TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_rep_user ON reponses (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rep_ex ON reponses (user_id, exercice_id);
 CREATE INDEX IF NOT EXISTS idx_comp_revoir ON competences (user_id, a_revoir_le);
@@ -417,6 +441,64 @@ function installer(app, db, deps) {
     return q('SELECT COUNT(*) n FROM exercices_generes WHERE skill = ?').get(skill).n
   }
 
+  // ---------------------------------------------------------------------
+  // LA CLÉ D'API DE CHAQUE UTILISATEUR
+  //
+  // Chiffrée au repos, jamais renvoyée au client, jamais journalisée.
+  // La clé de chiffrement dérive de JWT_SECRET — déjà obligatoire au
+  // démarrage, donc toujours présent et de forte entropie. Le sel est fixe
+  // et propre à cet usage : il ne s'agit pas de résister à une attaque par
+  // dictionnaire sur un mot de passe, mais de séparer cet usage des autres
+  // dérivations du même secret.
+  //
+  // Conséquence assumée : changer JWT_SECRET rend les clés illisibles. C'est
+  // le bon comportement — ce secret déconnecte déjà tout le monde, et une
+  // clé d'API qui survivrait à sa rotation serait une clé qu'on ne contrôle
+  // plus. Le déchiffrement échoue proprement et l'utilisateur repose la
+  // sienne.
+  // ---------------------------------------------------------------------
+  const CLE_CHIFFREMENT = crypto.scryptSync(
+    process.env.JWT_SECRET || '', 'blason-cles-ia-v1', 32,
+  )
+
+  function chiffrer(texte) {
+    const iv = crypto.randomBytes(12)
+    const c = crypto.createCipheriv('aes-256-gcm', CLE_CHIFFREMENT, iv)
+    const chiffre = Buffer.concat([c.update(texte, 'utf8'), c.final()])
+    return {
+      chiffre: chiffre.toString('base64'),
+      iv: iv.toString('base64'),
+      tag: c.getAuthTag().toString('base64'),
+    }
+  }
+
+  function dechiffrer(row) {
+    try {
+      const d = crypto.createDecipheriv(
+        'aes-256-gcm', CLE_CHIFFREMENT, Buffer.from(row.iv, 'base64'),
+      )
+      d.setAuthTag(Buffer.from(row.tag, 'base64'))
+      return Buffer.concat([
+        d.update(Buffer.from(row.chiffre, 'base64')), d.final(),
+      ]).toString('utf8')
+    } catch (e) {
+      // Marque d'authentification invalide : la ligne a été modifiée, ou le
+      // JWT_SECRET a changé. On ne devine pas, on rend null.
+      return null
+    }
+  }
+
+  // La clé à utiliser pour CE compte. Celle de l'utilisateur d'abord ; la clé
+  // partagée seulement si l'exploitant l'a explicitement ouverte à tous.
+  function cleDe(uid) {
+    const row = q('SELECT * FROM cles_ia WHERE user_id = ?').get(uid)
+    if (row) {
+      const c = dechiffrer(row)
+      if (c) return c
+    }
+    return gen.cleDeSecours()
+  }
+
   // ---- rythme (série, coeurs, objectif) --------------------------------
   const COEUR_MAX = 5
   const COEUR_DELAI_MS = 4 * 3600 * 1000 // un coeur toutes les 4 h
@@ -555,9 +637,10 @@ function installer(app, db, deps) {
     // parcours — c est un supplement, pas une dependance.
     let competences = deps.extraireCompetences(texte + ' ' + titre)
     let lecture = { par: 'mots-cles', metier: '' }
-    if (gen.disponible() && req.body?.sans_ia !== true) {
+    const cleUtilisateur = cleDe(uid)
+    if (cleUtilisateur && req.body?.sans_ia !== true) {
       try {
-        const ia = await gen.extraireIA(texte, titre)
+        const ia = await gen.extraireIA(cleUtilisateur, texte, titre)
         if (ia.competences.length >= 3) {
           competences = ia.competences.map((c) => c.nom)
           lecture = { par: 'modele', metier: ia.metier, detail: ia.competences }
@@ -617,11 +700,74 @@ function installer(app, db, deps) {
   //
   // Sans cle, cette route repond 501 avec la marche a suivre, et TOUT LE
   // RESTE continue de fonctionner. Le zero-cle demeure le mode par defaut.
+  // ---- la clé d'API du compte ------------------------------------------
+  //
+  // Trois routes, et une règle qui ne bouge pas : la clé ENTRE, elle ne
+  // ressort jamais. On rend son suffixe pour que l'utilisateur reconnaisse
+  // laquelle il a posée, rien de plus.
+  app.get('/api/moi/cle-ia', requireAuth, (req, res) => {
+    const row = q('SELECT suffixe, maj FROM cles_ia WHERE user_id = ?').get(req.auth.profile.id)
+    res.json({
+      configuree: Boolean(row),
+      suffixe: row ? row.suffixe : null,
+      depuis: row ? row.maj : null,
+      // Une clé partagée par l'exploitant vaut pour tout le monde : on le dit,
+      // pour que personne ne croie payer avec la sienne.
+      cle_partagee_active: Boolean(gen.cleDeSecours()),
+      modele: gen.MODELE,
+    })
+  })
+
+  app.put('/api/moi/cle-ia', requireAuth, async (req, res) => {
+    const uid = req.auth.profile.id
+    const cle = String(req.body?.cle || '').trim()
+    if (!cle) return res.status(400).json({ message: 'cle requise' })
+    // Contrôle de forme avant tout appel réseau : une faute de copier-coller
+    // ne mérite pas un aller-retour.
+    if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(cle)) {
+      return res.status(400).json({
+        message: "Cette valeur n'a pas la forme d'une clé Anthropic "
+          + '(elle commence par « sk-ant- »). Vérifie le copier-coller.',
+      })
+    }
+    // ON VÉRIFIE QUE LA CLÉ MARCHE, tout de suite. Sinon l'utilisateur
+    // découvrirait le problème plus tard, devant un échec de génération, sans
+    // savoir si c'est sa clé ou l'application.
+    // La liste des modèles ne consomme aucun jeton : le contrôle est gratuit.
+    try {
+      await gen.obtenirClient(cle).models.list({ limit: 1 })
+    } catch (e) {
+      const statut = e.status === 401 || e.status === 403 ? 400 : 502
+      return res.status(statut).json({
+        message: e.status === 401 || e.status === 403
+          ? "Cette clé est refusée par l'API Anthropic. Vérifie qu'elle est active."
+          : 'Impossible de vérifier la clé pour le moment : ' + (e.message || 'raison inconnue'),
+      })
+    }
+    const c = chiffrer(cle)
+    q(`INSERT INTO cles_ia (user_id, chiffre, iv, tag, suffixe, maj)
+       VALUES (?,?,?,?,?, datetime('now'))
+       ON CONFLICT(user_id) DO UPDATE SET
+         chiffre = excluded.chiffre, iv = excluded.iv, tag = excluded.tag,
+         suffixe = excluded.suffixe, maj = datetime('now')`)
+      .run(uid, c.chiffre, c.iv, c.tag, cle.slice(-4))
+    res.json({ configuree: true, suffixe: cle.slice(-4), modele: gen.MODELE })
+  })
+
+  app.delete('/api/moi/cle-ia', requireAuth, (req, res) => {
+    q('DELETE FROM cles_ia WHERE user_id = ?').run(req.auth.profile.id)
+    res.json({ configuree: false })
+  })
+
   app.get('/api/curriculum/etat', requireAuth, (req, res) => {
     const skill = req.query.skill ? cur.normaliser(String(req.query.skill)) : null
+    // La generation avancee depend de la cle DE CE COMPTE, plus d'un reglage
+    // du serveur : deux utilisateurs de la meme instance n'ont pas forcement
+    // la meme reponse.
+    const aUneCle = Boolean(cleDe(req.auth.profile.id))
     res.json({
-      generation_disponible: gen.disponible(),
-      modele: gen.disponible() ? gen.MODELE : null,
+      generation_disponible: aUneCle,
+      modele: aUneCle ? gen.MODELE : null,
       competences_ecrites_main: cur.competencesConnues(),
       ...(skill ? {
         skill,
@@ -681,7 +827,7 @@ function installer(app, db, deps) {
     }
 
     try {
-      const r = await gen.generer(skill, contexte, req.body?.combien)
+      const r = await gen.generer(cleDe(uid), skill, contexte, req.body?.combien)
       if (!r.exercices.length) {
         return res.status(502).json({
           message: 'Aucun exercice n a passe la verification.',

@@ -1,0 +1,38 @@
+# Ce qui ne doit JAMAIS entrer dans l'image.
+#
+# Une image Docker se pousse, se partage, se fouille. Tout ce qui y entre est
+# lisible par quiconque l'obtient — `docker history` et l'extraction des
+# couches montrent même ce qui a été ajouté puis supprimé dans une couche
+# ultérieure. On n'y met donc aucun secret, et aucune donnée réelle.
+
+# Les secrets. Ils arrivent par l'environnement au démarrage, jamais par
+# l'image.
+.env
+.env.*
+!.env.example
+
+# Les données réelles des comptes. Elles vivent dans un volume, dehors.
+server/*.db
+server/*.db-*
+server/storage/
+
+# Les dépendances de l'hôte : l'image fait son propre `npm ci`, et celles de
+# l'hôte peuvent être compilées pour un autre système.
+node_modules/
+
+# Les sources et l'outillage : le serveur ne sert que le build de dist/.
+# Moins il y a de code dans l'image, moins il y a de surface d'attaque.
+src/
+specs/
+supabase/
+public/
+*.md
+vite.config.ts
+tsconfig*.json
+.oxlintrc.json
+
+# L'historique et les sauvegardes horodatées prises à la main.
+.git/
+.gitignore
+*.avant-*
+dist.avant-*/

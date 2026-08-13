@@ -1,0 +1,103 @@
+# Blason — déploiement en conteneur.
+#
+# POURQUOI (13/08/2026)
+#
+# Blason était le seul service de cette machine à tourner HORS conteneur :
+# un service systemd nu, sous l'utilisateur `ubuntu`. Or `ubuntu` a
+# `sudo NOPASSWD: ALL` et appartient au groupe `docker`. Une exécution de
+# code à distance dans Blason donnait donc, en une étape : root sur la
+# machine, les identifiants GitHub, les clés SSH, et les `.env` de tous les
+# autres projets. Odoo, Caddy, PostgreSQL, Redis étaient déjà en conteneur ;
+# le service exposé sur Internet était l'exception.
+#
+# Ce fichier l'aligne sur la convention de la machine, et va plus loin :
+# l'image tourne sans privilèges, en lecture seule, sans aucune capacité
+# noyau, et sans possibilité d'en gagner.
+
+services:
+  blason:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: blason:local
+    container_name: blason
+    restart: unless-stopped
+
+    # ---------------------------------------------------------------------
+    # ISOLATION — chaque ligne retire un pouvoir.
+    # ---------------------------------------------------------------------
+    # Sans privilèges. L'image le fait déjà (USER node) ; on le répète ici
+    # pour que la contrainte reste vraie même si l'image change.
+    user: "1000:1000"
+
+    # Un processus ne peut plus acquérir de droits par un binaire setuid.
+    # C'est la marche que gravit toute évasion qui commence par une RCE.
+    security_opt:
+      - no-new-privileges:true
+
+    # Aucune capacité noyau. Un serveur HTTP qui écoute sur 8088 n'a besoin
+    # ni de changer d'utilisateur, ni de toucher au réseau, ni de monter
+    # quoi que ce soit. On part de zéro plutôt que de retirer au cas par cas.
+    cap_drop:
+      - ALL
+
+    # Système de fichiers en LECTURE SEULE. Un attaquant qui obtient
+    # l'exécution de code ne peut rien déposer : ni porte dérobée, ni
+    # mineur, ni script de persistance.
+    read_only: true
+
+    # Les deux seuls endroits inscriptibles, et ils sont volatils.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+
+    volumes:
+      # LES DONNÉES, et rien d'autre. C'est le seul point d'écriture qui
+      # survit à un redéploiement : base SQLite et fichiers envoyés.
+      - blason-donnees:/donnees
+
+    environment:
+      # Le fichier .env reste sur l'hôte et n'entre JAMAIS dans l'image.
+      # Il est lu ici, à l'exécution — voir env_file plus bas.
+      BLASON_DONNEES: /donnees
+      NODE_ENV: production
+      PORT: "8088"
+      HOST: 0.0.0.0
+
+    env_file:
+      # JWT_SECRET, identifiants Google. Docker lit ce fichier sur l'hôte au
+      # démarrage : son contenu ne se retrouve ni dans l'image, ni dans un
+      # dépôt Git.
+      - .env
+
+    # ---------------------------------------------------------------------
+    # RESSOURCES — Blason ne peut plus affamer ses voisins.
+    # Auparavant : aucune limite, à côté de conteneurs Odoo bornés à 3 Go.
+    # ---------------------------------------------------------------------
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 1.5
+    pids_limit: 256
+
+    # ---------------------------------------------------------------------
+    # RÉSEAU — pas de port publié sur l'hôte.
+    #
+    # Caddy joint Blason par le réseau interne, sous son nom. Le port 8088
+    # n'est donc atteignable NI depuis Internet, NI depuis l'hôte : la seule
+    # porte d'entrée est le HTTPS de Caddy.
+    # ---------------------------------------------------------------------
+    networks:
+      - tour_default
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  blason-donnees:
+    name: blason-donnees
+
+networks:
+  tour_default:
+    external: true
