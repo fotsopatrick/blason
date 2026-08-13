@@ -723,15 +723,58 @@ const SKILL_HINTS = [
   ['flask', 'Flask'], ['django', 'Django'], ['vue', 'Vue.js'], ['flutter', 'Flutter'],
   ['redis', 'Redis'], ['rabbitmq', 'RabbitMQ'], ['prometheus', 'Prometheus'],
   ['grafana', 'Grafana'], ['nginx', 'Nginx'], ['caddy', 'Caddy'],
+  // Progiciels de gestion et metiers (ajoutes le 13/08/2026) : une offre
+  // d'architecte IFS ne donnait qu'une competence parce qu'aucun de ces
+  // mots n'etait connu.
+  ['ifs', 'IFS Cloud'], ['sap', 'SAP'], ['salesforce', 'Salesforce'],
+  ['dynamics', 'Microsoft Dynamics'], ['netsuite', 'NetSuite'],
+  ['workday', 'Workday'], ['servicenow', 'ServiceNow'], ['sage', 'Sage'],
+  ['erp', 'ERP'], ['crm', 'CRM'], ['mes', 'MES'], ['plm', 'PLM'],
+  ['eam', 'EAM'], ['wms', 'WMS'], ['scm', 'Supply Chain'],
+  // Donnees et analyse
+  ['power bi', 'Power BI'], ['tableau', 'Tableau'], ['looker', 'Looker'],
+  ['snowflake', 'Snowflake'], ['databricks', 'Databricks'],
+  ['airflow', 'Airflow'], ['spark', 'Spark'], ['kafka', 'Kafka'],
+  ['etl', 'ETL'], ['data warehouse', 'Data warehouse'],
+  // Langages et cadres manquants
+  ['golang', 'Go'], ['rust', 'Rust'], ['php', 'PHP'], ['ruby', 'Ruby'],
+  ['kotlin', 'Kotlin'], ['swift', 'Swift'], ['angular', 'Angular'],
+  ['spring', 'Spring'], ['laravel', 'Laravel'], ['symfony', 'Symfony'],
+  // Metier, methode et conformite
+  ['itil', 'ITIL'], ['togaf', 'TOGAF'], ['prince2', 'PRINCE2'],
+  ['iso 27001', 'ISO 27001'], ['rgpd', 'RGPD'], ['gdpr', 'RGPD'],
+  ['architecte', 'Architecture'], ['architect', 'Architecture'],
+  ['integration', 'Integration'], ['migration', 'Migration'],
+  ['conseil', 'Conseil'], ['consulting', 'Conseil'],
+  ['finance', 'Finance'], ['procurement', 'Achats'],
+  ['manufacturing', 'Production'], ['maintenance', 'Maintenance'],
 ]
 
 function extraireCompetences(texte) {
   const bas = String(texte || '').toLowerCase()
-  const trouves = []
+  // CLASSEMENT PAR FREQUENCE (13/08/2026).
+  //
+  // Avant, on gardait les six PREMIERS de SKILL_HINTS, pas les six plus
+  // pertinents. Mesure sur une offre d'architecte IFS chez Accenture :
+  // le mot « IFS » y revient une quinzaine de fois, « azure » une seule —
+  // et la quete sortait sur Azure, parce qu'azure est en tete de liste.
+  //
+  // On compte donc les occurrences et on garde les plus presentes. Ce que
+  // l'annonce repete, c'est ce que le poste demande vraiment.
+  const compte = new Map()
   for (const [motif, nom] of SKILL_HINTS) {
-    if (bas.includes(motif) && !trouves.includes(nom)) trouves.push(nom)
+    let n = 0
+    let i = bas.indexOf(motif)
+    while (i !== -1) {
+      n += 1
+      i = bas.indexOf(motif, i + motif.length)
+    }
+    if (n > 0) compte.set(nom, (compte.get(nom) || 0) + n)
   }
-  return trouves.slice(0, 6)
+  return [...compte.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([nom]) => nom)
+    .slice(0, 6)
 }
 
 app.post('/api/functions/generate-quest', requireAuth, (req, res) => {
@@ -743,7 +786,10 @@ app.post('/api/functions/generate-quest', requireAuth, (req, res) => {
     skillsDemandees.filter((s) => !extraireCompetences(job).includes(s)),
   ).slice(0, 6)
   const cibles = competences.length ? competences : ['les fondamentaux du poste']
-  const etapes = cibles.slice(0, 3).map((c) => ({
+  // Autant d'etapes que de competences trouvees (13/08/2026).
+  // Le plafond etait fige a 3 alors qu'on en extrait jusqu'a 6 :
+  // trois competences s'affichaient sans jamais devenir du travail.
+  const etapes = cibles.map((c) => ({
     title: 'Maîtriser — ' + c,
     description: 'Ressource : le manuel officiel ou la documentation de ' + c + '. Lis-la, note les 5 points clés, applique-les dans un mini-exercice.',
   }))
@@ -758,6 +804,20 @@ app.post('/api/functions/generate-quest', requireAuth, (req, res) => {
     estimated_hours: 8,
     xp_reward: 150,
     provider: 'local-sqlite',
+  }
+  // AVERTISSEMENT (13/08/2026) : une annonce trop courte produit une
+  // quete pauvre, et rien ne le disait. Patrick a colle une annonce
+  // dont la copie s'etait arretee au pli « Full job description » :
+  // 181 caracteres au lieu de 12 000, une seule competence trouvee,
+  // une seule etape. Il a cru que le generateur etait faible.
+  // Un outil qui rend un resultat pauvre doit dire POURQUOI.
+  const nbCar = titreTxt.length
+  if (nbCar < 300) {
+    q.avertissement =
+      `L'annonce ne fait que ${nbCar} caracteres : la quete sera pauvre. ` +
+      `Colle le texte COMPLET de l'offre (souvent replie derriere un ` +
+      `« voir plus » sur Indeed ou LinkedIn). ` +
+      `${competences.length} competence(s) trouvee(s).`
   }
   res.json(q)
 })

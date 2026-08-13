@@ -70,6 +70,10 @@ export interface Quest {
   status: QuestStatus
   source: 'manual' | 'ai'
   job_posting: string | null
+  // L'offre d'ou la quete a ete forgee. Vide pour un parcours libre
+  // (les onze quetes Kubernetes, par exemple). Le champ existait en base
+  // depuis le debut, il manquait au contrat TypeScript (13/08/2026).
+  offre_id: string | null
   created_by: string
   created_at: string
   profiles?: Pick<Profile, 'username' | 'display_name' | 'avatar_url'>
