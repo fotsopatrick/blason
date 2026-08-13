@@ -21,6 +21,10 @@
  */
 const crypto = require('node:crypto')
 const cur = require('./curriculum.cjs')
+// Le generateur : ecrit des exercices pour n'importe quel metier quand une
+// cle d'API est configuree. Sans cle, il repond qu'il n'est pas configure
+// et le reste de Blason fonctionne a l'identique. Voir generateur.cjs.
+const gen = require('./generateur.cjs')
 
 const uuid = () => crypto.randomUUID()
 const jour = (d) => (d || new Date()).toISOString().slice(0, 10)
@@ -95,6 +99,21 @@ CREATE TABLE IF NOT EXISTS parcours (
   salaire TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Les exercices écrits par le modèle, pour les compétences qui n'ont pas de
+-- banque à la main. On les STOCKE : générer à chaque séance coûterait cher
+-- et donnerait un contenu instable — on ne révise pas ce qui change à
+-- chaque passage. Voir server/generateur.cjs.
+CREATE TABLE IF NOT EXISTS exercices_generes (
+  id TEXT PRIMARY KEY,              -- identifiant stable, comme la banque
+  skill TEXT NOT NULL,
+  type TEXT NOT NULL,
+  corps TEXT NOT NULL,              -- l'exercice complet, en JSON
+  modele TEXT NOT NULL DEFAULT '',
+  cree_par TEXT,                    -- qui a demandé la génération
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_gen_skill ON exercices_generes (skill);
 
 CREATE INDEX IF NOT EXISTS idx_rep_user ON reponses (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rep_ex ON reponses (user_id, exercice_id);
@@ -373,6 +392,31 @@ function installer(app, db, deps) {
 
   const q = (sql) => db.prepare(sql)
 
+  // ---------------------------------------------------------------------
+  // OÙ VIVENT LES EXERCICES D'UNE COMPÉTENCE (13/08/2026)
+  //
+  // Trois sources, dans cet ordre :
+  //   1. la banque écrite à la main (curriculum.cjs) — la meilleure ;
+  //   2. les exercices générés et STOCKÉS pour cette compétence ;
+  //   3. la fiche générique — le filet, jamais vide.
+  //
+  // La 2 n'existe que si une clé d'API est configurée et que quelqu'un a
+  // demandé l'enrichissement. Sans clé, on retombe exactement sur le
+  // comportement d'avant : rien ne casse, rien n'est masqué.
+  // ---------------------------------------------------------------------
+  function exercicesDe(skill) {
+    if (cur.aUneBanque(skill)) return cur.exercicesPour(skill)
+    const lignes = q('SELECT corps FROM exercices_generes WHERE skill = ? ORDER BY id').all(skill)
+    if (lignes.length) {
+      return lignes.map((l) => JSON.parse(l.corps))
+    }
+    return cur.exercicesPour(skill)
+  }
+
+  function compteGeneres(skill) {
+    return q('SELECT COUNT(*) n FROM exercices_generes WHERE skill = ?').get(skill).n
+  }
+
   // ---- rythme (série, coeurs, objectif) --------------------------------
   const COEUR_MAX = 5
   const COEUR_DELAI_MS = 4 * 3600 * 1000 // un coeur toutes les 4 h
@@ -478,7 +522,7 @@ function installer(app, db, deps) {
   })
 
   // ---- génération d'un parcours depuis une offre -----------------------
-  app.post('/api/parcours/generer', requireAuth, (req, res) => {
+  app.post('/api/parcours/generer', requireAuth, async (req, res) => {
     const uid = req.auth.profile.id
     let texte = String(req.body?.job_posting || req.body?.texte || '')
     let titre = String(req.body?.titre || '')
@@ -494,8 +538,37 @@ function installer(app, db, deps) {
     }
     if (!texte.trim()) return res.status(400).json({ message: "Colle le texte de l'offre (job_posting) ou donne offre_id." })
 
-    const competences = deps.extraireCompetences(texte + ' ' + titre)
+    // LIRE L ANNONCE (13/08/2026).
+    //
+    // Deux lectures possibles, et la seconde n existe que si une cle est
+    // configuree :
+    //
+    //   - le comptage pondere de mots-cles : sans cle, gratuit, instantane,
+    //     correct sur les annonces techniques. Sur une annonce de commercial
+    //     terrain, il ne sort qu une competence — sa liste ne connait que
+    //     l informatique ;
+    //   - le modele : lit n importe quel metier, nomme les competences comme
+    //     le metier les nomme.
+    //
+    // On tente le modele, on retombe SILENCIEUSEMENT sur les mots-cles s il
+    // echoue. Une panne de la generation ne doit jamais empecher de creer un
+    // parcours — c est un supplement, pas une dependance.
+    let competences = deps.extraireCompetences(texte + ' ' + titre)
+    let lecture = { par: 'mots-cles', metier: '' }
+    if (gen.disponible() && req.body?.sans_ia !== true) {
+      try {
+        const ia = await gen.extraireIA(texte, titre)
+        if (ia.competences.length >= 3) {
+          competences = ia.competences.map((c) => c.nom)
+          lecture = { par: 'modele', metier: ia.metier, detail: ia.competences }
+        }
+      } catch (e) {
+        // On note la raison sans casser : le parcours se cree quand meme.
+        lecture.echec_ia = e.message
+      }
+    }
     const p = construireParcours({ texte, titre, entreprise, competences })
+    p.lecture = lecture
 
     const id = uuid()
     q(`INSERT INTO parcours (id, offre_id, user_id, titre, entreprise, pays, competences, entretien, us_check, salaire)
@@ -534,6 +607,122 @@ function installer(app, db, deps) {
     res.json(rowOut(p))
   })
 
+  // ---- enrichir une competence : ecrire des exercices pour N'IMPORTE
+  //      QUEL metier, quand une cle d'API est configuree ------------------
+  //
+  // Blason est public. 46 exercices ecrits a la main couvrent l'architecture
+  // cloud et IA — un commercial, un comptable, une infirmiere n'auraient que
+  // la fiche generique. Ecrire une banque par metier a la main n'est pas
+  // tenable ; on delegue l'ecriture a un modele qui raisonne.
+  //
+  // Sans cle, cette route repond 501 avec la marche a suivre, et TOUT LE
+  // RESTE continue de fonctionner. Le zero-cle demeure le mode par defaut.
+  app.get('/api/curriculum/etat', requireAuth, (req, res) => {
+    const skill = req.query.skill ? cur.normaliser(String(req.query.skill)) : null
+    res.json({
+      generation_disponible: gen.disponible(),
+      modele: gen.disponible() ? gen.MODELE : null,
+      competences_ecrites_main: cur.competencesConnues(),
+      ...(skill ? {
+        skill,
+        source: cur.aUneBanque(skill) ? 'banque ecrite a la main'
+          : compteGeneres(skill) ? 'exercices generes'
+            : 'fiche generique',
+        nb_exercices: exercicesDe(skill).length,
+        nb_generes: compteGeneres(skill),
+      } : {}),
+    })
+  })
+
+  app.post('/api/curriculum/generer', requireAuth, async (req, res) => {
+    const uid = req.auth.profile.id
+    const brut = String(req.body?.skill || '').trim()
+    if (!brut) return res.status(400).json({ message: 'skill requis' })
+    const skill = cur.normaliser(brut)
+
+    if (cur.aUneBanque(skill)) {
+      return res.status(409).json({
+        message: `« ${skill} » a deja une banque ecrite a la main : `
+          + `${cur.exercicesPour(skill).length} exercices relus. On ne la remplace pas par du genere.`,
+      })
+    }
+    // On ne regenere pas ce qui existe : le contenu doit etre STABLE pour
+    // pouvoir etre revise, et regenerer serait payer deux fois.
+    const deja = compteGeneres(skill)
+    if (deja > 0 && !req.body?.encore) {
+      return res.status(409).json({
+        message: `« ${skill} » a deja ${deja} exercices generes. `
+          + 'Passe `encore: true` pour en ajouter davantage.',
+        nb_existants: deja,
+      })
+    }
+    // Plafond dur : sans lui, une boucle cote client peut faire grimper la
+    // facture sans que personne ne s'en apercoive.
+    const PLAFOND = 24
+    if (deja >= PLAFOND) {
+      return res.status(409).json({
+        message: `« ${skill} » a deja ${deja} exercices, c'est le plafond. `
+          + 'De quoi tenir plusieurs semaines de revisions espacees.',
+      })
+    }
+
+    // On situe la competence dans SON metier : « Suivi » ou « Qualite »
+    // ne veut rien dire hors contexte.
+    let contexte = { poste: '', entreprise: '', extrait: '' }
+    const p = q('SELECT * FROM parcours WHERE user_id = ? ORDER BY created_at DESC LIMIT 20').all(uid)
+      .find((row) => JSON.parse(row.competences).some((c) => c.nom === skill))
+    if (p) {
+      contexte.poste = p.titre
+      contexte.entreprise = p.entreprise
+      if (p.offre_id) {
+        const o = q('SELECT notes FROM offres WHERE id = ?').get(p.offre_id)
+        if (o) contexte.extrait = o.notes
+      }
+    }
+
+    try {
+      const r = await gen.generer(skill, contexte, req.body?.combien)
+      if (!r.exercices.length) {
+        return res.status(502).json({
+          message: 'Aucun exercice n a passe la verification.',
+          rejets: r.rejets,
+        })
+      }
+      const slug = cur.slug(skill)
+      let n = deja
+      const gardes = []
+      for (const ex of r.exercices) {
+        if (n >= PLAFOND) break
+        n += 1
+        const id = slug + '-ia-' + n
+        const corps = { ...ex, id, skill, origine: 'genere' }
+        q(`INSERT INTO exercices_generes (id, skill, type, corps, modele, cree_par)
+           VALUES (?,?,?,?,?,?)`)
+          .run(id, skill, ex.type, JSON.stringify(corps), r.modele, uid)
+        gardes.push({ id, type: ex.type })
+      }
+      res.json({
+        skill,
+        ajoutes: gardes.length,
+        total: compteGeneres(skill),
+        types: gardes.map((g) => g.type),
+        // On dit ce qui a ete refuse : un generateur qui cache ses rebuts
+        // laisse croire qu'il ne se trompe jamais.
+        rejetes: r.rejets,
+        modele: r.modele,
+        usage: r.usage,
+      })
+    } catch (e) {
+      if (e.nonConfigure) return res.status(501).json({ message: e.message, non_configure: true })
+      if (e.refus) return res.status(422).json({ message: e.message })
+      // Les erreurs du SDK portent un statut : on ne le maquille pas en 500.
+      const statut = e.status && e.status >= 400 && e.status < 600 ? e.status : 502
+      return res.status(statut).json({
+        message: 'La generation a echoue : ' + (e.message || 'raison inconnue'),
+      })
+    }
+  })
+
   // ---- la seance : 7 exercices choisis, pas tires au hasard -------------
   const TAILLE_SEANCE = 7
 
@@ -549,7 +738,7 @@ function installer(app, db, deps) {
     for (const s of skills) {
       const c = comps.get(s)
       const du = Boolean(c && c.a_revoir_le && c.a_revoir_le <= aujourdhui)
-      for (const ex of cur.exercicesPour(s)) {
+      for (const ex of exercicesDe(s)) {
         const vu = dejaVus.get(ex.id)
         let priorite
         if (!vu) priorite = 2                      // jamais fait : le coeur de l'apprentissage
@@ -650,7 +839,7 @@ function installer(app, db, deps) {
   // fabriquer un exercice, ni se noter lui-meme.
   function trouverExercice(uid, exId) {
     for (const s of cur.competencesConnues()) {
-      const t = cur.exercicesPour(s).find((e) => e.id === exId)
+      const t = exercicesDe(s).find((e) => e.id === exId)
       if (t) return t
     }
     // Exercice generique : sa competence n'est pas dans la banque, on la
@@ -658,7 +847,7 @@ function installer(app, db, deps) {
     const p = q('SELECT * FROM parcours WHERE user_id = ? ORDER BY created_at DESC LIMIT 20').all(uid)
     for (const row of p) {
       for (const c of JSON.parse(row.competences)) {
-        const t = cur.exercicesPour(c.nom).find((e) => e.id === exId)
+        const t = exercicesDe(c.nom).find((e) => e.id === exId)
         if (t) return t
       }
     }
@@ -823,8 +1012,8 @@ function installer(app, db, deps) {
         reussites: c ? c.reussites : 0,
         echecs: c ? c.echecs : 0,
         du: Boolean(c && c.a_revoir_le && c.a_revoir_le <= aujourdhui),
-        nb_exercices: cur.exercicesPour(s).length,
-        couvert: cur.aUneBanque(s),
+        nb_exercices: exercicesDe(s).length,
+        couvert: cur.aUneBanque(s) || compteGeneres(s) > 0,
       }
     })
 

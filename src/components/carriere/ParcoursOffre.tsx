@@ -98,6 +98,33 @@ export default function ParcoursOffre({ offreId }: { offreId: string }) {
     onError: (e: Error) => toast.error(e.message),
   })
 
+  // La génération d’exercices est facultative : elle n’existe que si une clé
+  // d’API est configurée côté serveur. On le demande AVANT d’afficher quoi
+  // que ce soit — proposer un bouton qui répondra « non configuré » est pire
+  // que de ne rien proposer.
+  const { data: etat } = useQuery({
+    queryKey: ['curriculum-etat'],
+    queryFn: () => appeler<{ generation_disponible: boolean; modele: string | null }>('/curriculum/etat'),
+  })
+
+  const aEnrichir = (parcours?.competences ?? []).filter((c) => !c.couvert)
+
+  const enrichir = useMutation({
+    mutationFn: (skill: string) =>
+      appeler<{ skill: string; ajoutes: number; total: number; rejetes: unknown[] }>(
+        '/curriculum/generer', { methode: 'POST', corps: { skill } },
+      ),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['parcours'] })
+      qc.invalidateQueries({ queryKey: ['curriculum-etat'] })
+      toast.success(
+        `${r.ajoutes} exercices écrits pour « ${r.skill} »`
+        + (r.rejetes.length ? ` — ${r.rejetes.length} écarté(s) à la vérification.` : '.'),
+      )
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   if (isLoading) return <LoadingState />
 
   return (
@@ -162,6 +189,57 @@ export default function ParcoursOffre({ offreId }: { offreId: string }) {
                 Les compétences en gris n’ont pas encore de banque dédiée : elles reçoivent la
                 fiche générique. C’est du travail réel, mais moins fin — autant le savoir.
               </p>
+
+              {/*
+                Enrichir une compétence non couverte.
+
+                Blason contient 46 exercices écrits à la main, tous sur
+                l’architecture cloud et IA. Pour tout autre métier, il ne
+                reste que la fiche générique. Avec une clé d’API, Blason
+                écrit lui-même des exercices dans le métier de l’annonce.
+                Sans clé, ce bloc explique comment en mettre une, plutôt que
+                d’afficher un bouton qui échouerait.
+              */}
+              {aEnrichir.length > 0 && (
+                <div className="mt-3 rounded-box border border-base-300 bg-base-200/40 p-3">
+                  {etat?.generation_disponible ? (
+                    <>
+                      <p className="text-sm">
+                        <b>{aEnrichir.length} compétence{aEnrichir.length > 1 ? 's' : ''}</b> sans
+                        exercices dédiés. Blason peut en écrire, dans le métier de cette annonce.
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {aEnrichir.map((c) => (
+                          <button
+                            key={c.nom}
+                            type="button"
+                            className="btn btn-outline btn-xs"
+                            disabled={enrichir.isPending}
+                            onClick={() => enrichir.mutate(c.nom)}
+                          >
+                            {enrichir.isPending && enrichir.variables === c.nom
+                              ? `✍️ ${c.nom}…`
+                              : `✍️ Écrire pour ${c.nom}`}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-base-content/50">
+                        Écrit une fois, puis stocké et réutilisé — la génération n’est pas
+                        refacturée à chaque séance. Les exercices produits portent leur
+                        provenance : ils n’ont pas été relus par un humain.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs leading-relaxed text-base-content/60">
+                      <b>Génération non configurée.</b> Blason peut écrire des exercices pour
+                      n’importe quel métier — commerce, comptabilité, soin, logistique — si une
+                      clé d’API est renseignée dans <code className="text-primary">BLASON_IA_CLE</code>{' '}
+                      (voir <code className="text-primary">.env.example</code>). Sans clé, tout le
+                      reste fonctionne : les banques écrites à la main et la fiche générique.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* La fiche USA : le manque le plus coûteux, et invisible depuis la France. */}

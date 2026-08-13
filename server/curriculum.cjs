@@ -824,32 +824,48 @@ function exercicesGeneriques(nom) {
   return [
     {
       id: slug(nom) + '-g1', skill: nom, type: 'design',
+      // L'énoncé disait « écris la fiche que tu présenterais en entretien »
+      // sans avoir jamais dit ce qu'était « la fiche » (13/08/2026). Un mot
+      // qu'on n'a pas défini n'est pas une consigne : c'est une devinette.
+      // On décrit maintenant la situation réelle, et ce qu'on attend.
       enonce:
-        "Le poste demande « " + nom + " ». Ecris la fiche que tu presenterais en entretien : " +
-        "a quoi ça sert, quand on l'évite, ce que ça coûte, et une panne réelle qu'on rencontre avec.",
+        "L'annonce demande « " + nom + " ». En entretien, on te posera la question la plus " +
+        "banale et la plus redoutable qui soit : « parlez-moi de " + nom + " ». Il faut y " +
+        "répondre en deux minutes, sans réciter la documentation.\n\n" +
+        "Prépare cette réponse maintenant, à voix haute, en quatre temps :\n" +
+        "1. à quoi ça sert — le problème que ça résout ;\n" +
+        "2. quand on ne s'en sert PAS — et pourquoi ;\n" +
+        "3. ce que ça coûte — argent, exploitation, compétences à recruter ;\n" +
+        "4. une panne concrète qu'on rencontre avec, et comment on la voit venir.",
       grille: [
-        "Le problème que ça resout, en une phrase, sans jargon",
-        "Un cas ou on ne l'utilise PAS, et pourquoi",
-        "Le coût : licence, exploitation, compétence a recruter",
-        "Une alternative credible et ce qui fait pencher",
-        "Un mode de panne concret et sa détection",
+        "Le problème que ça résout, en une phrase, sans jargon",
+        "Un cas où on ne l'utilise PAS, et pourquoi",
+        "Le coût : licence, exploitation, compétence à recruter",
+        "Une alternative crédible, et ce qui fait pencher d'un côté",
+        "Un mode de panne concret et la façon de le détecter",
       ],
       seuil: 3,
       pourquoi:
-        "Cette compétence n'a pas encore de banque dédiée dans Blason. La fiche en quatre points " +
-        "(rôle, limites, coût, panne) est le format qui tient en entretien pour n'importe quelle " +
-        "technologie — et écrire la fiche est déjà la moitie de l'apprentissage.",
+        "Ces quatre temps — rôle, limites, coût, panne — sont le format qui tient en entretien " +
+        "pour n'importe quelle technologie, et ils te distinguent immédiatement. Presque tout " +
+        "le monde sait répondre au point 1 ; le point 2 (quand on l'évite) et le point 4 (la " +
+        "panne réelle) sont ceux qui montrent qu'on a exploité la chose, pas seulement lu sa " +
+        "page d'accueil.\n\n" +
+        "Note : « " + nom + " » n'a pas encore de banque d'exercices dédiée dans Blason. Cet " +
+        "exercice est donc générique — du travail réel, mais moins fin que sur les compétences " +
+        "couvertes.",
     },
     {
       id: slug(nom) + '-g2', skill: nom, type: 'star',
       question:
-        "Relie « " + nom + " » a quelque chose que tu as réellement fait. Si tu ne l'as jamais " +
-        "pratique, raconte l'équivalent le plus proche et nomme honnetement l'écart.",
+        "Raconte une chose que tu as réellement faite avec « " + nom + " ». Si tu ne l'as jamais " +
+        "pratiqué, prends l'expérience la plus proche que tu aies, et dis clairement en quoi " +
+        "elle diffère de ce que l'annonce demande.",
       grille: [
-        "Un fait vérifiable, pas une intention",
-        "Un chiffre",
-        "L'écart avec ce que demande l'annonce, nomme sans le maquiller",
-        "Ce que tu fais concretement pour combler cet écart, avec une echeance",
+        "Un fait vérifiable, pas une intention ni un projet",
+        "Un chiffre : durée, volume, nombre d'utilisateurs, économie réalisée",
+        "L'écart avec ce que demande l'annonce, nommé sans le maquiller",
+        "Ce que tu fais concrètement pour combler cet écart, avec une échéance",
       ],
       seuil: 3,
       pourquoi:
@@ -903,16 +919,46 @@ const SYNONYMES = {
   'TOGAF': 'Communication',
 }
 
+// FRONTIERES DE MOT, ICI AUSSI (corrige le 13/08/2026).
+//
+// La correspondance souple se faisait par SOUS-CHAINE. Consequence mesuree :
+// « Negociation commerciale » devenait « Agents IA », parce que le synonyme
+// « IA » se trouve a l interieur de « negoc-IA-tion ». La competence d un
+// commercial etait rebaptisee competence d architecte, et Blason lui servait
+// des exercices sur les agents.
+//
+// C est exactement la faute corrigee le matin meme dans extraireCompetences
+// (« eam » dans « team ») — elle vivait aussi ici, et personne ne l avait vue
+// parce que jusque-la on ne normalisait que des mots d informatique. Une
+// correction faite a un endroit doit etre cherchee partout ou le meme motif
+// se repete.
+const RE_MOT = new Map()
+function contientMot(texte, mot) {
+  let re = RE_MOT.get(mot)
+  if (!re) {
+    const echappe = mot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[-\s]/g, '[-\\s]')
+    const debutAlnum = /^[a-z0-9]/i.test(mot)
+    const finAlnum = /[a-z0-9]$/i.test(mot)
+    re = new RegExp(
+      (debutAlnum ? '(?<![a-z0-9])' : '') + echappe + (finAlnum ? '(?![a-z0-9])' : ''),
+      'i',
+    )
+    RE_MOT.set(mot, re)
+  }
+  return re.test(texte)
+}
+
 function normaliser(nom) {
   if (BANQUE[nom]) return nom
   if (SYNONYMES[nom]) return SYNONYMES[nom]
-  // Correspondance souple : « Kubernetes — Réseau » -> « Kubernetes »
+  // Correspondance souple : « Kubernetes — Réseau » -> « Kubernetes ».
+  // Sur des MOTS ENTIERS, jamais sur des fragments.
   const bas = String(nom).toLowerCase()
   for (const cle of Object.keys(BANQUE)) {
-    if (bas.includes(cle.toLowerCase())) return cle
+    if (contientMot(bas, cle.toLowerCase())) return cle
   }
   for (const [syn, cible] of Object.entries(SYNONYMES)) {
-    if (bas.includes(syn.toLowerCase())) return cible
+    if (contientMot(bas, syn.toLowerCase())) return cible
   }
   return nom
 }

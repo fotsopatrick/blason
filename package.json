@@ -12,6 +12,7 @@
     "dev:all": "npm run dev & npm start"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
     "@tanstack/react-query": "^5.101.2",
     "express": "^5.2.1",
     "framer-motion": "^12.42.2",
