@@ -65,7 +65,9 @@ const KEYWORDS = {
     'ai',
     'ia',
     'machine learning',
-    'machine',
+    // « machine » seul est retiré (13/08/2026) : c'est un mot français courant.
+    // « la machine qui porte la production » envoyait une quête d'infrastructure
+    // vers le décor du Temple. « machine learning » reste, lui est sans ambiguïté.
     'data',
     'ml',
     'llm',
@@ -114,6 +116,29 @@ const BIOME_META: Record<
   },
 }
 
+// Cherche un MOT, pas un fragment.
+//
+// Avant (13/08/2026), on faisait `haystack.includes(w)`. Le mot-clé « ia »
+// se déclenchait alors dans « d-ia-gnostic », et « machine » dans « la machine
+// qui porte la production ». Résultat mesuré sur le parcours Kubernetes :
+// 7 quêtes d'infrastructure sur 11 basculaient vers le décor du Temple (IA).
+// Toute quête écrite en français normal dérivait.
+//
+// On borne donc par des limites de mots. `\b` ne convient pas pour les mots
+// accentués (« sécurité ») ni pour ceux qui contiennent une barre (« ci/cd ») :
+// on encadre par « pas une lettre » plutôt que par une frontière ASCII.
+const CACHE_MOTS = new Map<string, RegExp>()
+
+function contientLeMot(texte: string, mot: string): boolean {
+  let re = CACHE_MOTS.get(mot)
+  if (!re) {
+    const echappe = mot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    re = new RegExp(`(^|[^\\p{L}\\p{N}])${echappe}([^\\p{L}\\p{N}]|$)`, 'iu')
+    CACHE_MOTS.set(mot, re)
+  }
+  return re.test(texte)
+}
+
 function inferBiome(quest: Quest): BiomeId {
   const haystack = [
     quest.title,
@@ -128,7 +153,7 @@ function inferBiome(quest: Quest): BiomeId {
   const score: Record<BiomeId, number> = { citadelle: 0, foret: 0, temple: 0, forge: 0 }
   for (const [biome, words] of Object.entries(KEYWORDS)) {
     for (const w of words) {
-      if (haystack.includes(w)) score[biome as BiomeId] += 1
+      if (contientLeMot(haystack, w)) score[biome as BiomeId] += 1
     }
   }
 
