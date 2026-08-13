@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Le Royaume — Blason</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+<style>
+  :root{
+    --or:#e8b64c; --or-fonce:#a97c1e;
+    --nuit:#141a24; --nuit2:#1d2634; --nuit3:#28344a;
+    --texte:#f2ede3; --doux:#9aa7bd;
+    --juste:#3fbf6a; --faux:#e0574c; --lien:#5aa9f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:var(--nuit); color:var(--texte);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------------------------------------------------------------- HUD */
+  #hud{
+    display:flex;align-items:center;gap:14px;padding:8px 14px;
+    background:linear-gradient(180deg,#1d2634,#161d29);
+    border-bottom:2px solid #0d1219; flex-wrap:wrap; flex:none;
+  }
+  .jauge{display:flex;align-items:center;gap:6px;font-weight:700;font-size:15px;white-space:nowrap}
+  .jauge small{font-weight:500;color:var(--doux);font-size:12px}
+  #barre{
+    flex:1;min-width:120px;height:14px;background:#0d1219;border-radius:99px;
+    overflow:hidden;position:relative;border:1px solid #0a0e14;
+  }
+  #barre i{
+    display:block;height:100%;width:0%;border-radius:99px;
+    background:linear-gradient(90deg,var(--or-fonce),var(--or));
+    transition:width .45s cubic-bezier(.2,.8,.3,1);
+  }
+  #barreTxt{position:absolute;inset:0;display:grid;place-items:center;font-size:10px;
+    font-weight:800;color:#0d1219;text-shadow:0 1px 0 rgba(255,255,255,.25)}
+  #ecu{width:42px;height:48px;flex:none;cursor:pointer}
+  #titreParcours{font-size:12px;color:var(--doux);max-width:34ch;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  #titreParcours b{color:var(--or);font-weight:700}
+
+  /* -------------------------------------------------------------- monde */
+  #scene{flex:1;position:relative;overflow:hidden;background:#0a1a12}
+  #jeu{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
+  #infobulle{
+    position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
+    background:rgba(13,18,25,.94);border:2px solid var(--or-fonce);border-radius:12px;
+    padding:10px 16px;font-size:14px;max-width:min(92vw,540px);text-align:center;
+    pointer-events:none;opacity:0;transition:opacity .18s;box-shadow:0 8px 28px rgba(0,0,0,.5)
+  }
+  #infobulle.on{opacity:1}
+  #infobulle b{color:var(--or)}
+  #infobulle kbd{
+    background:#2a3548;border:1px solid #47566f;border-bottom-width:2px;
+    border-radius:5px;padding:1px 6px;font-family:inherit;font-size:12px;font-weight:700
+  }
+
+  /* ------------------------------------------------------------ boutons */
+  .btn{
+    font:inherit;font-weight:800;letter-spacing:.3px;cursor:pointer;
+    border:0;border-bottom:4px solid rgba(0,0,0,.35);border-radius:12px;
+    padding:13px 22px;color:#12181f;background:var(--or);
+    transition:transform .06s, filter .15s;
+  }
+  .btn:hover{filter:brightness(1.08)}
+  .btn:active{transform:translateY(2px);border-bottom-width:2px}
+  .btn[disabled]{opacity:.4;cursor:not-allowed;filter:grayscale(.6)}
+  .btn.fant{background:transparent;color:var(--doux);border:2px solid #35415a;border-bottom-width:4px}
+
+  /* -------------------------------------------------------------- séance */
+  #seance{
+    position:absolute;inset:0;background:linear-gradient(180deg,#161d29,#10151e);
+    display:none;flex-direction:column;z-index:20;
+  }
+  #seance.on{display:flex}
+  #sTete{display:flex;align-items:center;gap:12px;padding:12px 16px;flex:none}
+  #sBarre{flex:1;height:12px;background:#0d1219;border-radius:99px;overflow:hidden}
+  #sBarre i{display:block;height:100%;width:0;background:var(--juste);
+    border-radius:99px;transition:width .35s}
+  #sCorps{flex:1;overflow-y:auto;padding:8px 18px 18px;
+    max-width:760px;width:100%;margin:0 auto;-webkit-overflow-scrolling:touch}
+  .etiq{display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.2px;
+    text-transform:uppercase;color:var(--nuit);background:var(--or);
+    padding:3px 10px;border-radius:99px;margin-bottom:14px}
+  .etiq.g{background:#5aa9f0}
+  .etiq.v{background:var(--juste)}
+  #sQuestion{font-size:21px;line-height:1.45;font-weight:600;margin-bottom:20px}
+  #sSituation{font-size:15px;line-height:1.6;color:var(--doux);
+    border-left:3px solid var(--or-fonce);padding-left:14px;margin-bottom:18px}
+  .choix{
+    display:block;width:100%;text-align:left;font:inherit;font-size:15.5px;line-height:1.45;
+    background:#1e2836;color:var(--texte);border:2px solid #2f3c52;border-bottom-width:4px;
+    border-radius:14px;padding:14px 16px;margin-bottom:11px;cursor:pointer;
+    transition:border-color .12s,background .12s,transform .06s;
+  }
+  .choix:hover:not([disabled]){border-color:var(--or-fonce);background:#243043}
+  .choix:active:not([disabled]){transform:translateY(2px);border-bottom-width:2px}
+  .choix.sel{border-color:var(--or);background:#2b3448}
+  .choix.ok{border-color:var(--juste);background:#173427}
+  .choix.ko{border-color:var(--faux);background:#3a1c1a}
+  .choix[disabled]{cursor:default}
+  .critere{
+    display:flex;gap:12px;align-items:flex-start;background:#1e2836;
+    border:2px solid #2f3c52;border-radius:12px;padding:12px 14px;margin-bottom:9px;
+    cursor:pointer;font-size:14.5px;line-height:1.45;
+  }
+  .critere:hover{border-color:var(--or-fonce)}
+  .critere.coche{border-color:var(--juste);background:#16301f}
+  .critere .case{
+    flex:none;width:22px;height:22px;border-radius:6px;
+    border:2px solid #4a5a76;display:grid;place-items:center;font-size:14px;
+    font-weight:900;color:var(--juste);margin-top:1px
+  }
+  .critere.coche .case{border-color:var(--juste);background:var(--juste);color:#0d1219}
+  #sNombre{
+    font:inherit;font-size:26px;font-weight:800;text-align:center;width:210px;
+    padding:14px;border-radius:14px;border:2px solid #2f3c52;border-bottom-width:4px;
+    background:#1e2836;color:var(--texte)
+  }
+  #sNombre:focus{outline:none;border-color:var(--or)}
+  #sPied{
+    flex:none;padding:14px 18px;border-top:2px solid #0d1219;background:#131a25;
+    display:flex;align-items:center;gap:14px;justify-content:flex-end;flex-wrap:wrap
+  }
+  #verdict{flex:1;min-width:220px;font-size:14px;line-height:1.5}
+  #verdict b{display:block;font-size:17px;margin-bottom:3px}
+  #verdict.ok b{color:var(--juste)} #verdict.ko b{color:var(--faux)}
+  #pourquoi{
+    background:#1b2331;border-left:4px solid var(--or);border-radius:0 12px 12px 0;
+    padding:14px 16px;margin-top:16px;font-size:14.5px;line-height:1.62;color:#dfe6f0
+  }
+  #pourquoi h4{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--or);margin-bottom:7px}
+  #grilleRep{margin-top:14px;font-size:14px;line-height:1.6}
+  #grilleRep li{margin:0 0 5px 20px}
+  .gain{
+    position:absolute;left:50%;top:38%;transform:translateX(-50%);
+    font-size:42px;font-weight:900;color:var(--or);pointer-events:none;
+    text-shadow:0 3px 12px rgba(0,0,0,.7);animation:monte 1.05s ease-out forwards;z-index:50
+  }
+  @keyframes monte{
+    0%{opacity:0;transform:translate(-50%,14px) scale(.7)}
+    22%{opacity:1;transform:translate(-50%,-6px) scale(1.14)}
+    100%{opacity:0;transform:translate(-50%,-62px) scale(1)}
+  }
+
+  /* -------------------------------------------------------------- bilan */
+  #bilan{
+    position:absolute;inset:0;background:rgba(10,14,20,.96);z-index:30;
+    display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:18px;padding:24px;text-align:center
+  }
+  #bilan.on{display:flex}
+  #bilan h2{font-size:30px;color:var(--or)}
+  #bilanStat{display:flex;gap:26px;flex-wrap:wrap;justify-content:center}
+  #bilanStat div{font-size:13px;color:var(--doux)}
+  #bilanStat b{display:block;font-size:30px;color:var(--texte);font-weight:900}
+
+  /* -------------------------------------------------------------- écran */
+  #mur{
+    position:absolute;inset:0;background:var(--nuit);z-index:60;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;padding:26px;text-align:center
+  }
+  #mur.off{display:none}
+  #mur h1{font-size:26px;color:var(--or)}
+  #mur p{max-width:44ch;line-height:1.6;color:var(--doux);font-size:15px}
+  #mur code{background:#1e2836;padding:2px 7px;border-radius:5px;color:var(--or)}
+
+  /* ------------------------------------------------------------ tactile */
+  #croix{
+    position:absolute;left:14px;bottom:14px;width:150px;height:150px;
+    display:none;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+    gap:5px;z-index:10;opacity:.82;touch-action:none
+  }
+  #croix button{
+    background:rgba(30,40,54,.92);border:2px solid #3d4b63;border-radius:11px;
+    color:var(--texte);font-size:20px;font-weight:900;cursor:pointer
+  }
+  #croix button:active{background:var(--or);color:#12181f}
+  @media(pointer:coarse){#croix{display:grid}}
+  @media(max-width:620px){
+    #titreParcours{display:none}
+    #sQuestion{font-size:18px}
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <canvas id="ecu" width="84" height="96" title="Ton blason — chaque quartier est une compétence de niveau 3 ou plus"></canvas>
+  <span class="jauge" id="jSerie" title="Série : jours consécutifs où l'objectif a été atteint">🔥 <span>0</span></span>
+  <span class="jauge" id="jCoeurs" title="Cœurs : une erreur sur un exercice à réponse unique en coûte un. Ils reviennent tout seuls.">❤️ <span>5</span></span>
+  <div id="barre"><i></i><span id="barreTxt">0 / 50 XP</span></div>
+  <span class="jauge" id="jRevoir" title="Compétences à revoir aujourd'hui">🔁 <span>0</span></span>
+  <span id="titreParcours"></span>
+</div>
+
+<div id="scene">
+  <canvas id="jeu"></canvas>
+  <div id="infobulle"></div>
+
+  <div id="croix">
+    <span></span><button data-d="haut">▲</button><span></span>
+    <button data-d="gauche">◀</button><button data-d="action">●</button><button data-d="droite">▶</button>
+    <span></span><button data-d="bas">▼</button><span></span>
+  </div>
+
+  <!-- ------------------------------------------------------- la séance -->
+  <div id="seance">
+    <div id="sTete">
+      <button class="btn fant" id="sQuitter" style="padding:8px 14px">✕</button>
+      <div id="sBarre"><i></i></div>
+      <span class="jauge" id="sCoeurs">❤️ <span>5</span></span>
+    </div>
+    <div id="sCorps">
+      <!-- Message d'attente / de séance vide. C'est un ELEMENT DEDIE, et non
+           un remplacement de innerHTML sur #sCorps : écraser #sCorps
+           détruirait #sEtiq, #sQuestion, #sZone… que montrer() cherche
+           ensuite. Bug trouvé au contrôle en navigateur, pas à la lecture. -->
+      <div id="sMessage" hidden style="padding:30px 0;font-size:16px;line-height:1.6"></div>
+      <span class="etiq" id="sEtiq">—</span>
+      <div id="sSituation" hidden></div>
+      <div id="sQuestion"></div>
+      <div id="sZone"></div>
+      <div id="pourquoi" hidden><h4>Pourquoi</h4><p id="pourquoiTxt"></p></div>
+      <div id="grilleRep" hidden></div>
+    </div>
+    <div id="sPied">
+      <div id="verdict"></div>
+      <button class="btn" id="sValider">Valider</button>
+    </div>
+  </div>
+
+  <!-- --------------------------------------------------------- le bilan -->
+  <div id="bilan">
+    <h2 id="bilanTitre">Séance terminée</h2>
+    <div id="bilanStat"></div>
+    <div id="bilanMot" style="max-width:46ch;line-height:1.6;color:var(--doux)"></div>
+    <button class="btn" id="bilanOk">Retour au Royaume</button>
+  </div>
+
+  <!-- ---------------------------------------------------------- le mur -->
+  <div id="mur">
+    <h1>Le Royaume</h1>
+    <p id="murTxt">Chargement…</p>
+    <div id="murActions"></div>
+  </div>
+</div>
+
+<script src="royaume.js"></script>
+</body>
+</html>

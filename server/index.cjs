@@ -197,6 +197,14 @@ const REL_ALIAS = {
 const app = express()
 app.use(express.json({ limit: '10mb' }))
 
+// CONTROLE DE CHARGE (13/08/2026) — installe AVANT toute route.
+//
+// `node:sqlite` est synchrone : chaque requete SQL bloque la boucle
+// d'evenements. Sans plafond, la couche 2D (qui interroge le serveur en
+// boucle) peut mettre le service a genoux depuis un seul onglet oublie.
+// Details et reglages : server/charge.cjs.
+require('./charge.cjs').installer(app)
+
 // ---------------------------------------------------------------------------
 // Santé
 // ---------------------------------------------------------------------------
@@ -745,18 +753,64 @@ app.get('/api/storage/:bucket/*splat', (req, res) => {
 // « Functions » : génération IA (provider local = pas de clé ; extrait les
 // compétences du texte de l'offre et bâtit une quête structurée).
 // ---------------------------------------------------------------------------
+// TROISIEME COLONNE : LE POIDS (ajoute le 13/08/2026).
+//
+// Mesure sur l'offre « Principal AI Engineering Architect » (Robots & Pencils,
+// US Remote) : le mot « cloud » y apparait 11 fois, « agentic » 9 fois,
+// « multi-agent » 5, « bedrock » 4, « agentcore » 4. Au simple comptage,
+// « Cloud » gagnait — et le parcours genere portait sur « Cloud », un mot qui
+// ne dit rien, au lieu des systemes multi-agents qui sont TOUT le poste.
+//
+// Un mot generique repete ne vaut pas un mot precis. Poids :
+//   3 = technologie nommee, rare, discriminante (agentcore, langgraph, bedrock)
+//   2 = technologie identifiable (kubernetes, terraform, snowflake) — defaut
+//   1 = mot-valise (cloud, api, architecture, security) : present partout,
+//       ne caracterise aucun poste a lui seul.
 const SKILL_HINTS = [
+  // --- IA agentique et LLM (ajoute le 13/08/2026) -------------------------
+  // Ces mots manquaient TOUS. Sur une offre d'architecte IA, le generateur
+  // etait donc aveugle a l'essentiel de l'annonce.
+  ['agentic', 'Agents IA', 3], ['multi-agent', 'Agents IA', 3],
+  ['multi agent', 'Agents IA', 3], ['agent orchestration', 'Agents IA', 3],
+  ['langgraph', 'Agents IA', 3], ['langchain', 'Agents IA', 3],
+  ['crewai', 'Agents IA', 3], ['autogen', 'Agents IA', 3],
+  ['llamaindex', 'Agents IA', 3], ['tool use', 'Agents IA', 3],
+  ['agentcore', 'AWS', 3], ['bedrock', 'AWS', 3], ['sagemaker', 'AWS', 3],
+  ['lambda', 'AWS', 2], ['eventbridge', 'AWS', 2], ['cloudformation', 'Terraform', 2],
+  ['vertex ai', 'MLOps', 3], ['mlops', 'MLOps', 3], ['llmops', 'MLOps', 3],
+  ['mlflow', 'MLOps', 3], ['kubeflow', 'MLOps', 3], ['hugging face', 'MLOps', 3],
+  ['pytorch', 'MLOps', 2], ['tensorflow', 'MLOps', 2], ['model serving', 'MLOps', 3],
+  ['feature store', 'MLOps', 3], ['fine-tuning', 'MLOps', 2], ['fine tuning', 'MLOps', 2],
+  ['rag', 'RAG', 3], ['retrieval-augmented', 'RAG', 3], ['retrieval augmented', 'RAG', 3],
+  ['vector database', 'RAG', 3], ['vector store', 'RAG', 3], ['vector', 'RAG', 2],
+  ['embedding', 'RAG', 3], ['pinecone', 'RAG', 3], ['weaviate', 'RAG', 3],
+  ['pgvector', 'RAG', 3], ['chunking', 'RAG', 3], ['reranking', 'RAG', 3],
+  ['prompt engineering', 'Agents IA', 2], ['prompt injection', 'Securite', 3],
+  ['responsible ai', 'Securite', 3], ['ai safety', 'Securite', 3],
+  ['guardrail', 'Securite', 3], ['pii', 'Securite', 2],
+  ['token economics', 'Cout', 3], ['cost optimization', 'Cout', 3],
+  ['model routing', 'Cout', 3], ['quantization', 'Cout', 3],
+  ['caching', 'Cout', 2], ['inference', 'MLOps', 2],
+  ['observability', 'MLOps', 2], ['evaluation framework', 'MLOps', 3],
+  ['system design', 'Architecture', 2], ['event-driven', 'Architecture', 2],
+  ['microservices', 'Architecture', 2], ['serverless', 'Architecture', 2],
+  ['dbt', 'Donnees', 3], ['prefect', 'Donnees', 3], ['redshift', 'Donnees', 3],
+  ['bigquery', 'Donnees', 3], ['data lake', 'Donnees', 2], ['streaming', 'Donnees', 2],
+  ['soc2', 'Securite', 3], ['soc 2', 'Securite', 3], ['hipaa', 'Securite', 3],
+  ['h-1b', 'Marche US', 3], ['green card', 'Marche US', 3], ['sponsorship', 'Marche US', 3],
+  ['work authorization', 'Marche US', 3],
+  // --- socle historique ---------------------------------------------------
   ['azure', 'Azure'], ['aws', 'AWS'], ['gcp', 'Google Cloud'], ['kubernetes', 'Kubernetes'],
   ['docker', 'Docker'], ['terraform', 'Terraform'], ['ansible', 'Ansible'], ['jenkins', 'Jenkins'],
   ['kubernetes', 'Kubernetes'], ['python', 'Python'], ['typescript', 'TypeScript'],
   ['javascript', 'JavaScript'], ['react', 'React'], ['node', 'Node.js'], ['odoo', 'Odoo'],
   ['c#', 'C# / .NET'], ['.net', 'C# / .NET'], ['java', 'Java'], ['sql', 'SQL'],
   ['postgres', 'PostgreSQL'], ['mysql', 'MySQL'], ['mongo', 'MongoDB'], ['linux', 'Linux'],
-  ['devops', 'DevOps'], ['ci/cd', 'CI/CD'], ['git', 'Git'], ['api', 'API'],
+  ['devops', 'DevOps'], ['ci/cd', 'CI/CD'], ['git', 'Git', 1], ['api', 'API', 1],
   ['machine learning', 'Machine learning'], ['llm', 'LLM'], ['agents', 'Agents IA'],
   ['artificial intelligence', 'IA'], ['intelligence artificielle', 'IA'],
   ['agile', 'Agile'], ['scrum', 'Scrum'], ['powershell', 'PowerShell'],
-  ['bash', 'Bash'], ['cloud', 'Cloud'], ['security', 'Sécurité'], ['graphql', 'GraphQL'],
+  ['bash', 'Bash'], ['cloud', 'Cloud', 1], ['security', 'Securite', 1], ['graphql', 'GraphQL'],
   ['flask', 'Flask'], ['django', 'Django'], ['vue', 'Vue.js'], ['flutter', 'Flutter'],
   ['redis', 'Redis'], ['rabbitmq', 'RabbitMQ'], ['prometheus', 'Prometheus'],
   ['grafana', 'Grafana'], ['nginx', 'Nginx'], ['caddy', 'Caddy'],
@@ -780,33 +834,69 @@ const SKILL_HINTS = [
   // Metier, methode et conformite
   ['itil', 'ITIL'], ['togaf', 'TOGAF'], ['prince2', 'PRINCE2'],
   ['iso 27001', 'ISO 27001'], ['rgpd', 'RGPD'], ['gdpr', 'RGPD'],
-  ['architecte', 'Architecture'], ['architect', 'Architecture'],
-  ['integration', 'Integration'], ['migration', 'Migration'],
-  ['conseil', 'Conseil'], ['consulting', 'Conseil'],
-  ['finance', 'Finance'], ['procurement', 'Achats'],
-  ['manufacturing', 'Production'], ['maintenance', 'Maintenance'],
+  ['architecte', 'Architecture', 1], ['architect', 'Architecture', 1],
+  ['integration', 'Integration', 1], ['migration', 'Migration', 1],
+  ['conseil', 'Conseil', 1], ['consulting', 'Conseil', 1],
+  ['finance', 'Finance', 1], ['procurement', 'Achats'],
+  ['manufacturing', 'Production'], ['maintenance', 'Maintenance', 1],
 ]
+
+// FRONTIERES DE MOT (13/08/2026) — correction d'un bug silencieux et grave.
+//
+// Le comptage se faisait par indexOf(), donc sur des SOUS-CHAINES. Mesure sur
+// l'offre « Principal AI Engineering Architect » : le motif « eam » sortait 7
+// fois... dont 6 a l'interieur du mot « team ». Le parcours genere contenait
+// donc « EAM » (gestion d'actifs industriels), une competence qui n'a
+// strictement rien a voir avec le poste.
+//
+// Meme classe de faux positifs, tous verifies sur des annonces reelles :
+//   « sage »  dans mes-sage-, u-sage-        -> Sage (ERP)
+//   « git »   dans di-git-al, le-git-imate   -> Git
+//   « api »   dans r-api-d, -api-ece         -> API
+//   « java »  dans -java-script              -> Java
+//   « mes »   dans so-mes-, ti-mes-          -> MES
+//
+// On exige donc que le motif ne soit colle ni a une lettre ni a un chiffre.
+// Deux precautions : les motifs qui commencent ou finissent par autre chose
+// qu'une lettre (« .net », « c# », « ci/cd ») n'ont pas de frontiere de ce
+// cote-la, sinon « asp.net » ne matcherait jamais ; et le pluriel anglais est
+// accepte (« agents » compte pour « agent »).
+const RE_CACHE = new Map()
+function motifRegex(motif) {
+  let re = RE_CACHE.get(motif)
+  if (re) return re
+  const echappe = motif.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // « multi-agent » doit aussi matcher « multi agent ».
+  const corps = echappe.replace(/[-\s]/g, '[-\\s]')
+  const debutAlnum = /^[a-z0-9]/.test(motif)
+  const finAlnum = /[a-z0-9]$/.test(motif)
+  re = new RegExp(
+    (debutAlnum ? '(?<![a-z0-9])' : '') + corps + (finAlnum ? '(?:s|es)?(?![a-z0-9])' : ''),
+    'g',
+  )
+  RE_CACHE.set(motif, re)
+  return re
+}
 
 function extraireCompetences(texte) {
   const bas = String(texte || '').toLowerCase()
-  // CLASSEMENT PAR FREQUENCE (13/08/2026).
+  // CLASSEMENT PAR FREQUENCE PONDEREE (13/08/2026).
   //
   // Avant, on gardait les six PREMIERS de SKILL_HINTS, pas les six plus
   // pertinents. Mesure sur une offre d'architecte IFS chez Accenture :
   // le mot « IFS » y revient une quinzaine de fois, « azure » une seule —
   // et la quete sortait sur Azure, parce qu'azure est en tete de liste.
   //
-  // On compte donc les occurrences et on garde les plus presentes. Ce que
-  // l'annonce repete, c'est ce que le poste demande vraiment.
+  // Le comptage seul ne suffisait pas non plus : un mot-valise repete
+  // (« cloud », 11 fois) ecrasait la technologie qui fait le poste
+  // (« agentic », 9 fois + « multi-agent », 5). D'ou le poids, troisieme
+  // colonne de SKILL_HINTS. Ce que l'annonce repete compte ; ce qu'elle
+  // NOMME PRECISEMENT compte davantage.
   const compte = new Map()
-  for (const [motif, nom] of SKILL_HINTS) {
-    let n = 0
-    let i = bas.indexOf(motif)
-    while (i !== -1) {
-      n += 1
-      i = bas.indexOf(motif, i + motif.length)
-    }
-    if (n > 0) compte.set(nom, (compte.get(nom) || 0) + n)
+  for (const [motif, nom, poids] of SKILL_HINTS) {
+    const m = bas.match(motifRegex(motif))
+    if (!m || !m.length) continue
+    compte.set(nom, (compte.get(nom) || 0) + m.length * (poids === undefined ? 2 : poids))
   }
   return [...compte.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -872,6 +962,30 @@ app.get('/api/realtime/guild_messages', (req, res) => {
   const last = rows.length ? rows[rows.length - 1].id : 0
   res.json({ messages: fresh.map(rowOut), last_seq: Math.max(msgSeq, last) })
 })
+
+// ---------------------------------------------------------------------------
+// LE MOTEUR D'APPRENTISSAGE (13/08/2026)
+//
+// Exercices notes, repetition espacee, serie quotidienne, coeurs, blason,
+// et le parcours genere depuis une offre reelle. Voir specs/BLASON-ECART-US.md
+// pour ce qui manquait et pourquoi.
+//
+// Installe ICI, apres extraireCompetences() dont il se sert, et avant le
+// service des fichiers statiques qui capture tout le reste.
+// ---------------------------------------------------------------------------
+require('./moteur.cjs').installer(app, db, {
+  requireAuth, rowOut, extraireCompetences,
+})
+
+// ---------------------------------------------------------------------------
+// LE ROYAUME — la couche 2D.
+//
+// La source React de Blason a disparu (le depot ne contient que dist/).
+// Le Royaume est donc une page autonome, sans dependance, servie a cote du
+// React existant : aucune regression possible sur ce qui marche deja.
+// ---------------------------------------------------------------------------
+const ROYAUME = path.join(ROOT, 'royaume')
+app.use('/royaume', express.static(ROYAUME))
 
 // ---------------------------------------------------------------------------
 // Statique : le build React

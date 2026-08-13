@@ -26,3 +26,21 @@ dist-ssr
 # Supabase local secrets
 supabase/functions/.env
 .env
+
+# ---------------------------------------------------------------------------
+# Ajouts du 13/08/2026 — fusion avec le .gitignore de la branche `master`
+# (celle qui ne porte que le build). Ces règles y vivaient seules ; elles
+# protègent des choses qu'on ne veut versionner sur AUCUNE branche.
+# ---------------------------------------------------------------------------
+
+# Bases SQLite : données réelles des comptes, et elles se recréent au premier
+# démarrage du serveur. Le dépôt est public : elles n'y ont rien à faire.
+server/*.db
+server/*.db-journal
+server/*.db-wal
+server/*.db.avant-*
+server/storage/
+
+# Sauvegardes horodatées prises à la main pendant les sessions de travail.
+*.avant-*
+dist.avant-*/
