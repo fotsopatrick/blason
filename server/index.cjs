@@ -347,7 +347,9 @@ function applyRelation(row, table, rel) {
   if (!TABLES.has(childTable)) return
   const rows = db.prepare(`SELECT * FROM ${childTable} WHERE ${pkCol} = ?`).all(row[fkCol])
   const out = rows.map(rowOut)
-  if (rel.cols) {
+  // cols === ['*'] (ou null) signifie « toutes les colonnes » : on ne supprime rien.
+  const allCols = !rel.cols || (rel.cols.length === 1 && rel.cols[0] === '*')
+  if (rel.cols && !allCols) {
     for (const r of out) {
       for (const k of Object.keys(r)) {
         if (!rel.cols.includes(k)) delete r[k]
@@ -430,9 +432,15 @@ app.get('/api/from/:table', requireAuth, async (req, res) => {
     const sel = req.query.select || '*'
     const parsed = parseSelect(String(sel))
     const filters = []
+    const relFilters = []
     for (const [k, v] of Object.entries(req.query)) {
       if (['order', 'limit', 'select', 'or', 'asc'].includes(k)) continue
-      filters.push({ op: 'eq', col: k, val: v })
+      if (k.includes('.')) {
+        const dot = k.indexOf('.')
+        relFilters.push({ rel: k.slice(0, dot), col: k.slice(dot + 1), val: v })
+      } else {
+        filters.push({ op: 'eq', col: k, val: v })
+      }
     }
     const orStr = req.query.or ? String(req.query.or) : ''
     const state = {
@@ -445,6 +453,21 @@ app.get('/api/from/:table', requireAuth, async (req, res) => {
       rels: parsed.rels,
     }
     let rows = await chainResult(table, state)
+    // Relations nécessaires : celles du select + celles des filtres relationnels.
+    const relsToApply = [...parsed.rels]
+    for (const rf of relFilters) {
+      if (!relsToApply.some((r) => (r.table || r) === rf.rel)) relsToApply.push(rf.rel)
+    }
+    for (const rel of relsToApply) {
+      for (const r of rows) applyRelation(r, table, rel)
+    }
+    // Filtres sur colonnes de relation (ex. quest_assignments.quest_id) : en mémoire.
+    for (const rf of relFilters) {
+      rows = rows.filter((r) => {
+        const child = Array.isArray(r[rf.rel]) ? r[rf.rel][0] : r[rf.rel]
+        return !!child && String(child[rf.col]) === String(rf.val)
+      })
+    }
     // Filtre OR côté serveur : « user_id.eq.X,guild_id.eq.Y »
     if (orStr) {
       rows = rows.filter((r) =>
