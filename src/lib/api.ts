@@ -1,7 +1,16 @@
 /**
- * Client API local — remplace supabase-js.
- * Parle au serveur Express + SQLite (server/index.cjs).
- * Zéro clé, zéro compte tiers : le token vit en localStorage.
+ * Le client API de Blason.
+ *
+ * Parle au serveur Express + SQLite (server/index.cjs) : zéro clé, zéro
+ * compte tiers, le jeton vit en localStorage.
+ *
+ * Il garde la FORME de l API supabase-js (.from().select(), .rpc(), .auth,
+ * .storage, .channel()) parce que 24 fichiers l appelaient ainsi au moment
+ * de la migration : reproduire la forme a evite de reecrire toutes les
+ * pages. Le fichier s appelait « supabase.ts » et exportait « supabase » —
+ * un nom qui a survecu au backend qu il designait, et qui laissait croire
+ * a un lecteur que l application dependait encore de Supabase. Renomme le
+ * 13/08/2026, en meme temps que la suppression du dossier supabase/.
  */
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -343,7 +352,7 @@ const functions = {
 }
 
 // ---------------------------------------------------------------------------
-// Realtime : polling (remplace le canal websocket Supabase)
+// Realtime : polling (remplace le canal websocket de l ancien backend)
 // ---------------------------------------------------------------------------
 function channel(_name: string) {
   return {
@@ -383,9 +392,9 @@ async function removeChannel(_c?: unknown) {
 }
 
 // ---------------------------------------------------------------------------
-// Export : l'objet « supabase » local
+// Export : le client
 // ---------------------------------------------------------------------------
-export const supabase = {
+export const api = {
   from<T = any>(table: string) {
     return new QueryBuilder<T>(table)
   },

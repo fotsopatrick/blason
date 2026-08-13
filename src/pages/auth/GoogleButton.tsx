@@ -1,8 +1,8 @@
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 
 export default function GoogleButton({ label }: { label: string }) {
   const handleGoogle = () => {
-    supabase.auth.signInWithOAuth()
+    api.auth.signInWithOAuth()
   }
 
   return (

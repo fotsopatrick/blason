@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { useMyGuild } from '@/hooks/queries'
@@ -29,7 +29,7 @@ function ReviewPanel({ questId }: { questId: string }) {
   const { data: submissions, isLoading } = useQuery({
     queryKey: ['quest-submissions', questId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('submissions')
         .select('*, quest_assignments!inner(*), profiles!submissions_submitted_by_fkey(username, display_name, avatar_url)')
         .eq('quest_assignments.quest_id', questId)
@@ -41,7 +41,7 @@ function ReviewPanel({ questId }: { questId: string }) {
 
   const reviewMutation = useMutation({
     mutationFn: async ({ id, approve }: { id: string; approve: boolean }) => {
-      const { error } = await supabase.rpc('review_submission', {
+      const { error } = await api.rpc('review_submission', {
         p_submission_id: id,
         p_approve: approve,
         p_feedback: feedbackById[id] ?? '',
@@ -163,12 +163,12 @@ export default function QuestDetailPage() {
     enabled: !!id,
     queryFn: async () => {
       const [questRes, assignRes] = await Promise.all([
-        supabase
+        api
           .from('quests')
           .select('*, profiles!quests_created_by_fkey(username, display_name, avatar_url)')
           .eq('id', id!)
           .maybeSingle(),
-        supabase.from('quest_assignments').select('*').eq('quest_id', id!),
+        api.from('quest_assignments').select('*').eq('quest_id', id!),
       ])
       if (questRes.error) throw questRes.error
       return {
@@ -180,7 +180,7 @@ export default function QuestDetailPage() {
 
   const acceptMutation = useMutation({
     mutationFn: async (asGuild: boolean) => {
-      const { data: inserted, error } = await supabase
+      const { data: inserted, error } = await api
         .from('quest_assignments')
         .insert({
           quest_id: id,

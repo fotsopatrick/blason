@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { EmptyState, ErrorState, LoadingState, UserAvatar } from '@/components/ui'
@@ -17,7 +17,7 @@ export default function AdminUsersTab() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false })
@@ -28,7 +28,7 @@ export default function AdminUsersTab() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<Profile> }) => {
-      const { error } = await supabase.from('profiles').update(patch).eq('id', id)
+      const { error } = await api.from('profiles').update(patch).eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {

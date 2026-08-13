@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { ErrorState, LoadingState, SkillTags } from '@/components/ui'
@@ -72,7 +72,7 @@ function RealisationCard({ realisation }: { realisation: Realisation }) {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
+      const { error } = await api
         .from('realisations')
         .update({
           projet,
@@ -93,7 +93,7 @@ function RealisationCard({ realisation }: { realisation: Realisation }) {
 
   const sendMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
+      const { error } = await api
         .from('realisations')
         .update({ etat: 'envoyee' })
         .eq('id', realisation.id)
@@ -223,7 +223,7 @@ export default function OffreDetailPage() {
     queryKey: ['offre', id],
     enabled: !!id,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('offres')
         .select('*')
         .eq('id', id!)
@@ -237,7 +237,7 @@ export default function OffreDetailPage() {
     queryKey: ['realisations', id],
     enabled: !!id,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('realisations')
         .select('*')
         .eq('offre_id', id!)
@@ -251,7 +251,7 @@ export default function OffreDetailPage() {
     queryKey: ['quests-offre', id],
     enabled: !!id,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('quests')
         .select('*')
         .eq('offre_id', id!)
@@ -264,7 +264,7 @@ export default function OffreDetailPage() {
   const launchMutation = useMutation({
     mutationFn: async () => {
       // 1. Génère les quêtes de préparation depuis l'offre.
-      const { data: genData, error: genError } = await supabase.functions.invoke('generate-quest', {
+      const { data: genData, error: genError } = await api.functions.invoke('generate-quest', {
         body: { job_posting: `${offre?.titre ?? ''}\n${offre?.notes ?? ''}` },
       })
       if (genError) throw genError
@@ -279,7 +279,7 @@ export default function OffreDetailPage() {
         xp_reward: number
       }
       // 2. Crée la quête liée à l'offre.
-      const { data: questData, error: questError } = await supabase.from('quests').insert({
+      const { data: questData, error: questError } = await api.from('quests').insert({
         title: gen.title,
         story: gen.story,
         description: gen.description,
@@ -300,7 +300,7 @@ ${offre?.notes ?? ''}`,
       })
       if (questError) throw questError
       // 3. Crée la réalisation liée à l'offre.
-      const { data, error } = await supabase.from('realisations').insert({
+      const { data, error } = await api.from('realisations').insert({
         offre_id: id,
         poste: offre?.titre ?? '',
         etat: 'construction',

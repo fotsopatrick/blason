@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { ErrorState, LoadingState, StatCard } from '@/components/ui'
 import type { AdminStats } from '@/lib/types'
 
@@ -7,7 +7,7 @@ export default function AdminStatsTab() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_stats')
+      const { data, error } = await api.rpc('admin_stats')
       if (error) throw error
       return data as AdminStats
     },

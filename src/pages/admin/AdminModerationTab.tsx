@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import { EmptyState, ErrorState, LoadingState, UserAvatar } from '@/components/ui'
 import { formatRelative } from '@/lib/format'
@@ -20,7 +20,7 @@ export default function AdminModerationTab() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin-pending-submissions'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('submissions')
         .select('*, profiles!submissions_submitted_by_fkey(username, display_name, avatar_url), quest_assignments!inner(quest_id, guild_id, quests!inner(title))')
         .eq('status', 'pending')
@@ -32,7 +32,7 @@ export default function AdminModerationTab() {
 
   const reviewMutation = useMutation({
     mutationFn: async ({ id, approve }: { id: string; approve: boolean }) => {
-      const { error } = await supabase.rpc('review_submission', {
+      const { error } = await api.rpc('review_submission', {
         p_submission_id: id,
         p_approve: approve,
         p_feedback: feedbackById[id] ?? '',

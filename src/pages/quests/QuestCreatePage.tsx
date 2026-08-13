@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { PageHeader } from '@/components/ui'
@@ -39,7 +39,7 @@ export default function QuestCreatePage() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('generate-quest', {
+      const { data, error } = await api.functions.invoke('generate-quest', {
         body: { job_posting: jobPosting },
       })
       if (error) {
@@ -87,7 +87,7 @@ export default function QuestCreatePage() {
       if (skills.length === 0) {
         throw new Error('Ajoute au moins une compétence.')
       }
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('quests')
         .insert({
           title: title.trim(),

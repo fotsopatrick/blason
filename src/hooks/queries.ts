@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Guild, GuildMember, QuestAssignment } from '@/lib/types'
 
@@ -10,7 +10,7 @@ export function useMyGuild() {
     queryKey: ['my-guild', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('guild_members')
         .select('*, guilds(*)')
         .eq('user_id', user!.id)
@@ -33,7 +33,7 @@ export function useMyAssignments() {
       const orFilter = guildId
         ? `user_id.eq.${user!.id},guild_id.eq.${guildId}`
         : `user_id.eq.${user!.id}`
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('quest_assignments')
         .select('*, quests(*), guilds(*)')
         .or(orFilter)

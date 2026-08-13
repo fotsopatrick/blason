@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { useMyGuild } from '@/hooks/queries'
@@ -30,7 +30,7 @@ export default function GuildsPage() {
   const { data: guilds, isLoading, isError, refetch } = useQuery({
     queryKey: ['guilds'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('guilds')
         .select('*, guild_members(count)')
         .order('xp', { ascending: false })
@@ -41,7 +41,7 @@ export default function GuildsPage() {
 
   const joinMutation = useMutation({
     mutationFn: async (guildId: string) => {
-      const { error } = await supabase.rpc('join_guild', { p_guild_id: guildId })
+      const { error } = await api.rpc('join_guild', { p_guild_id: guildId })
       if (error) throw error
       return guildId
     },
@@ -56,7 +56,7 @@ export default function GuildsPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.rpc('create_guild', {
+      const { data, error } = await api.rpc('create_guild', {
         p_name: name.trim(),
         p_emblem: emblem,
         p_motto: motto.trim(),

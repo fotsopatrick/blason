@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { EmptyState, ErrorState, FadeIn, LoadingState, PageHeader } from '@/components/ui'
@@ -56,7 +56,7 @@ function EntretienCard({ entretien }: { entretien: Entretien }) {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
+      const { error } = await api
         .from('entretiens')
         .update({ preparation, questions_reelles: questions })
         .eq('id', entretien.id)
@@ -71,7 +71,7 @@ function EntretienCard({ entretien }: { entretien: Entretien }) {
 
   const passeMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
+      const { error } = await api
         .from('entretiens')
         .update({ etat: 'passe' })
         .eq('id', entretien.id)
@@ -160,7 +160,7 @@ export default function EntretiensPage() {
     queryKey: ['entretiens', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('entretiens')
         .select('*')
         .eq('created_by', user!.id)
@@ -172,7 +172,7 @@ export default function EntretiensPage() {
 
   const prepareMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.from('entretiens').insert({
+      const { data, error } = await api.from('entretiens').insert({
         poste: poste.trim(),
         entreprise: entreprise.trim(),
         date_entretien: date || null,
@@ -182,12 +182,12 @@ export default function EntretiensPage() {
       if (error) throw error
       const row = data[0] as Entretien | undefined
       if (!row) throw new Error("L'entretien n'a pas pu être créé")
-      const { data: gen, error: genError } = await supabase.functions.invoke('generate-quest', {
+      const { data: gen, error: genError } = await api.functions.invoke('generate-quest', {
         body: { job_posting: poste.trim() },
       })
       if (genError) throw genError
       const preparation = buildPreparation(gen)
-      const { error: upError } = await supabase
+      const { error: upError } = await api
         .from('entretiens')
         .update({ preparation })
         .eq('id', row.id)

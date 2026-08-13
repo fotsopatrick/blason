@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { LoadingState, PageHeader, UserAvatar, XPBar } from '@/components/ui'
@@ -29,7 +29,7 @@ export default function ProfilePage() {
       .map((s) => s.trim())
       .filter(Boolean)
       .slice(0, 12)
-    const { error } = await supabase
+    const { error } = await api
       .from('profiles')
       .update({
         display_name: displayName.trim(),
@@ -51,7 +51,7 @@ export default function ProfilePage() {
     setUploading(true)
     const ext = file.name.split('.').pop() ?? 'png'
     const path = `${profile.id}/avatar-${Date.now()}.${ext}`
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await api.storage
       .from('avatars')
       .upload(path, file, { upsert: true })
     if (uploadError) {
@@ -59,8 +59,8 @@ export default function ProfilePage() {
       toast.error(`Échec de l'upload : ${uploadError.message}`)
       return
     }
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-    const { error } = await supabase
+    const { data: { publicUrl } } = api.storage.from('avatars').getPublicUrl(path)
+    const { error } = await api
       .from('profiles')
       .update({ avatar_url: publicUrl })
       .eq('id', profile.id)

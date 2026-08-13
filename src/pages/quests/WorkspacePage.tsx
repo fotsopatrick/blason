@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { ErrorState, LoadingState, PageHeader } from '@/components/ui'
@@ -25,12 +25,12 @@ export default function WorkspacePage() {
     enabled: !!assignmentId,
     queryFn: async () => {
       const [assignRes, subsRes] = await Promise.all([
-        supabase
+        api
           .from('quest_assignments')
           .select('*, quests(*), guilds(*)')
           .eq('id', assignmentId!)
           .maybeSingle(),
-        supabase
+        api
           .from('submissions')
           .select('*, profiles!submissions_submitted_by_fkey(username, display_name, avatar_url)')
           .eq('assignment_id', assignmentId!)
@@ -50,15 +50,15 @@ export default function WorkspacePage() {
       const urls: string[] = []
       for (const file of files) {
         const path = `${user!.id}/${assignmentId}/${Date.now()}-${file.name}`
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await api.storage
           .from('deliverables')
           .upload(path, file)
         if (uploadError) throw new Error(`Upload de ${file.name} : ${uploadError.message}`)
-        const { data: { publicUrl } } = supabase.storage.from('deliverables').getPublicUrl(path)
+        const { data: { publicUrl } } = api.storage.from('deliverables').getPublicUrl(path)
         urls.push(publicUrl)
       }
       // 2. Création de la soumission.
-      const { error } = await supabase.from('submissions').insert({
+      const { error } = await api.from('submissions').insert({
         assignment_id: assignmentId,
         submitted_by: user!.id,
         github_url: githubUrl.trim(),
@@ -67,7 +67,7 @@ export default function WorkspacePage() {
       })
       if (error) throw error
       // 3. Marque l'assignment comme soumis.
-      await supabase
+      await api
         .from('quest_assignments')
         .update({ status: 'submitted' })
         .eq('id', assignmentId!)

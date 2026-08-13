@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui'
 import { formatDate } from '@/lib/format'
@@ -15,7 +15,7 @@ export default function AdminGuildsTab() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin-guilds'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('guilds')
         .select('*, guild_members(count)')
         .order('created_at', { ascending: false })
@@ -26,7 +26,7 @@ export default function AdminGuildsTab() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('guilds').delete().eq('id', id)
+      const { error } = await api.from('guilds').delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {

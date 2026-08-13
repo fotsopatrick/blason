@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import { DifficultyBadge, EmptyState, ErrorState, LoadingState } from '@/components/ui'
 import { formatDate } from '@/lib/format'
@@ -15,7 +15,7 @@ export default function AdminQuestsTab() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin-quests'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('quests')
         .select('*, profiles!quests_created_by_fkey(display_name)')
         .order('created_at', { ascending: false })
@@ -26,7 +26,7 @@ export default function AdminQuestsTab() {
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: QuestStatus }) => {
-      const { error } = await supabase.from('quests').update({ status }).eq('id', id)
+      const { error } = await api.from('quests').update({ status }).eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
@@ -38,7 +38,7 @@ export default function AdminQuestsTab() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('quests').delete().eq('id', id)
+      const { error } = await api.from('quests').delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {

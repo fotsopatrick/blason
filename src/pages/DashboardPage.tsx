@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useMyAssignments, useMyGuild } from '@/hooks/queries'
 import {
@@ -29,7 +29,7 @@ function CompanyDashboard() {
     queryKey: ['company-quests', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('quests')
         .select('*, quest_assignments(id, status)')
         .eq('created_by', user!.id)
@@ -43,7 +43,7 @@ function CompanyDashboard() {
     queryKey: ['company-pending-subs', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('submissions')
         .select('*, quest_assignments!inner(quest_id, quests!inner(title, created_by))')
         .eq('status', 'pending')

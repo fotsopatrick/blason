@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { EmptyState, ErrorState, FadeIn, LoadingState, PageHeader, SkillTags } from '@/components/ui'
@@ -63,7 +63,7 @@ export default function OffresPage() {
     queryKey: ['offres', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('offres')
         .select('*')
         .eq('created_by', user!.id)
@@ -75,7 +75,7 @@ export default function OffresPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.from('offres').insert({
+      const { data, error } = await api.from('offres').insert({
         titre: titre.trim(),
         entreprise: entreprise.trim(),
         url: url.trim(),

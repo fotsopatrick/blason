@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   DifficultyBadge,
@@ -25,7 +25,7 @@ export default function PortfolioPage() {
     queryKey: ['portfolio', username],
     enabled: !!username,
     queryFn: async () => {
-      const { data: profile, error } = await supabase
+      const { data: profile, error } = await api
         .from('profiles')
         .select('*')
         .eq('username', username!)
@@ -34,13 +34,13 @@ export default function PortfolioPage() {
       if (!profile) return null
 
       const [assignmentsRes, membershipRes] = await Promise.all([
-        supabase
+        api
           .from('quest_assignments')
           .select('*, quests(*), submissions(github_url, status, created_at)')
           .eq('status', 'completed')
           .or(`user_id.eq.${profile.id},accepted_by.eq.${profile.id}`)
           .order('completed_at', { ascending: false }),
-        supabase
+        api
           .from('guild_members')
           .select('*, guilds(*)')
           .eq('user_id', profile.id)

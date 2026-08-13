@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { EmptyState, ErrorState, LoadingState, PageHeader, UserAvatar } from '@/components/ui'
 import { levelForXp } from '@/lib/levels'
 import type { LeaderboardGuild, LeaderboardUser } from '@/lib/types'
@@ -25,7 +25,7 @@ export default function LeaderboardPage() {
     queryKey: ['leaderboard', 'users', period],
     enabled: board === 'users',
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('leaderboard_users', {
+      const { data, error } = await api.rpc('leaderboard_users', {
         p_period: period,
         p_limit: 20,
       })
@@ -38,7 +38,7 @@ export default function LeaderboardPage() {
     queryKey: ['leaderboard', 'guilds', period],
     enabled: board === 'guilds',
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('leaderboard_guilds', {
+      const { data, error } = await api.rpc('leaderboard_guilds', {
         p_period: period,
         p_limit: 20,
       })

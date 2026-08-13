@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import GoogleButton from './GoogleButton'
 
@@ -23,7 +23,7 @@ export default function LoginPage() {
     e.preventDefault()
     setError(null)
     setSubmitting(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await api.auth.signInWithPassword({ email, password })
     setSubmitting(false)
     if (error) {
       setError(

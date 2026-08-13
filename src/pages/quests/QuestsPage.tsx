@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import QuestCard from '@/components/QuestCard'
 import { EmptyState, ErrorState, FadeIn, LoadingState, PageHeader } from '@/components/ui'
@@ -28,7 +28,7 @@ export default function QuestsPage() {
   const { data: quests, isLoading, isError, refetch } = useQuery({
     queryKey: ['quests', 'published'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('quests')
         .select('*, profiles!quests_created_by_fkey(username, display_name, avatar_url)')
         .eq('status', 'published')
@@ -43,7 +43,7 @@ export default function QuestsPage() {
   const { data: offres } = useQuery({
     queryKey: ['offres', 'pour-filtre'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('offres')
         .select('id, titre, entreprise')
         .order('created_at', { ascending: false })

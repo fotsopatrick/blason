@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import {
@@ -35,7 +35,7 @@ function GuildChat({ guildId, members }: { guildId: string; members: (GuildMembe
     let active = true
 
     const load = async () => {
-      const { data } = await supabase
+      const { data } = await api
         .from('guild_messages')
         .select('*')
         .eq('guild_id', guildId)
@@ -49,7 +49,7 @@ function GuildChat({ guildId, members }: { guildId: string; members: (GuildMembe
     void load()
 
     // Realtime : nouveaux messages de la guilde.
-    const channel = supabase
+    const channel = api
       .channel(`guild-chat-${guildId}`)
       .on(
         'postgres_changes',
@@ -66,7 +66,7 @@ function GuildChat({ guildId, members }: { guildId: string; members: (GuildMembe
 
     return () => {
       active = false
-      void supabase.removeChannel(channel)
+      void api.removeChannel(channel)
     }
   }, [guildId])
 
@@ -79,7 +79,7 @@ function GuildChat({ guildId, members }: { guildId: string; members: (GuildMembe
     const content = text.trim()
     if (!content || !user) return
     setSending(true)
-    const { error } = await supabase
+    const { error } = await api
       .from('guild_messages')
       .insert({ guild_id: guildId, user_id: user.id, content })
     setSending(false)
@@ -151,13 +151,13 @@ export default function GuildDetailPage() {
     enabled: !!id,
     queryFn: async () => {
       const [guildRes, membersRes, assignmentsRes] = await Promise.all([
-        supabase.from('guilds').select('*').eq('id', id!).maybeSingle(),
-        supabase
+        api.from('guilds').select('*').eq('id', id!).maybeSingle(),
+        api
           .from('guild_members')
           .select('*, profiles(*)')
           .eq('guild_id', id!)
           .order('joined_at', { ascending: true }),
-        supabase
+        api
           .from('quest_assignments')
           .select('*, quests(id, title, xp_reward, difficulty)')
           .eq('guild_id', id!)
@@ -175,7 +175,7 @@ export default function GuildDetailPage() {
 
   const joinMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc('join_guild', { p_guild_id: id })
+      const { error } = await api.rpc('join_guild', { p_guild_id: id })
       if (error) throw error
     },
     onSuccess: () => {
@@ -188,7 +188,7 @@ export default function GuildDetailPage() {
 
   const leaveMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc('leave_guild')
+      const { error } = await api.rpc('leave_guild')
       if (error) throw error
     },
     onSuccess: () => {

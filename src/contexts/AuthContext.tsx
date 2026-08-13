@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
-import type { LocalSession } from '@/lib/supabase'
+import { api } from '@/lib/api'
+import type { LocalSession } from '@/lib/api'
 import type { Profile } from '@/lib/types'
 
 interface AuthState {
@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = useCallback(async (userId: string) => {
-    const { data } = await supabase
+    const { data } = await api
       .from('profiles')
       .select('*')
       .eq('id', userId)
@@ -32,14 +32,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    api.auth.getSession().then(async ({ data: { session } }) => {
       if (cancelled) return
       setSession(session)
       if (session?.user) await fetchProfile(session.user.id)
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = api.auth.onAuthStateChange(
       (_event, newSession) => {
         setSession(newSession)
         if (newSession?.user) {
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session, fetchProfile])
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
+    await api.auth.signOut()
   }, [])
 
   return (
