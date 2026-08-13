@@ -134,8 +134,18 @@
     });
   }
 
+  // On accepte ?parcours=<id> dans l'adresse : c'est ce que passe le bouton
+  // « Entrer dans le Royaume » depuis la fiche d'une offre. Sans ce
+  // parametre, le serveur sert le parcours le plus recent.
+  function parcoursDemande() {
+    try {
+      var id = new URLSearchParams(location.search).get('parcours');
+      return id ? '?parcours_id=' + encodeURIComponent(id) : '';
+    } catch (e) { return ''; }
+  }
+
   function chargerCarte() {
-    return api('/royaume/carte').then(function (c) {
+    return api('/royaume/carte' + parcoursDemande()).then(function (c) {
       carte = c;
       batParTuile = {};
       c.batiments.forEach(function (b) {

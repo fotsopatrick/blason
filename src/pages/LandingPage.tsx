@@ -96,8 +96,28 @@ export default function LandingPage() {
         </section>
       </main>
 
+      {/*
+        Le lien vers le code source vit ICI, sur le produit (13/08/2026).
+
+        Il figurait auparavant dans le menu « Découvrir » de la vitrine, à
+        côté du lien vers ce site : un visiteur de la vitrine se voyait
+        proposer le dépôt avant même d'avoir vu l'application. La vitrine
+        envoie donc vers le produit, et le produit assume son code. Qui
+        arrive jusqu'ici a déjà vu ce que ça fait.
+      */}
       <footer className="border-t border-base-300 py-6 text-center text-sm text-base-content/50">
-        Blason — apprends en héros.
+        <p>Blason — apprends en héros.</p>
+        <p className="mt-2">
+          <a
+            href="https://github.com/fotsopatrick/blason"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="link link-hover inline-flex items-center gap-1.5"
+          >
+            <span aria-hidden>🐙</span>
+            Le code est ouvert — voir le dépôt sur GitHub
+          </a>
+        </p>
       </footer>
     </div>
   )

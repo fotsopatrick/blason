@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { ErrorState, LoadingState, SkillTags } from '@/components/ui'
+import ParcoursOffre from '@/components/carriere/ParcoursOffre'
 import { formatDate } from '@/lib/format'
 
 type Offre = {
@@ -346,11 +347,43 @@ ${offre?.notes ?? ''}`,
               <SkillTags skills={offre.tags} />
             </div>
           )}
+          {/*
+            L'annonce est REPLIEE (13/08/2026).
+
+            Elle etait affichee en entier : une offre reelle fait 4 000 a
+            8 000 caracteres, ce qui repoussait le parcours et les
+            realisations tres loin sous la ligne de flottaison. On heritait
+            du defaut d'Indeed, ou la description ensevelit l'action.
+
+            Le texte complet reste indispensable — c'est lui que le moteur
+            lit — mais il n'a pas a occuper l'ecran par defaut.
+          */}
           {offre.notes && (
-            <p className="mt-2 whitespace-pre-wrap text-sm text-base-content/70">{offre.notes}</p>
+            <details className="collapse-arrow collapse mt-3 border border-base-300 bg-base-200/40">
+              <summary className="collapse-title min-h-0 py-3 text-sm font-medium">
+                Texte de l’annonce
+                <span className="ml-2 font-normal text-base-content/50">
+                  {offre.notes.length.toLocaleString('fr-FR')} caractères
+                </span>
+              </summary>
+              <div className="collapse-content">
+                <p className="max-h-96 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-base-content/70">
+                  {offre.notes}
+                </p>
+              </div>
+            </details>
           )}
         </div>
       </div>
+
+      {/*
+        Le parcours d'apprentissage, place juste sous l'annonce : c'est ce
+        qu'on fait d'une offre en premier. Le moteur savait deja la lire
+        (compétences réelles, questions d'entretien, fiche « prêt pour les
+        USA »), mais aucun bouton ne l'atteignait — l'endpoint n'existait
+        que pour la ligne de commande.
+      */}
+      <ParcoursOffre offreId={offre.id} />
 
       <div className="card mt-6 bg-base-100 shadow-sm">
         <div className="card-body">
