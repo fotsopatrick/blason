@@ -290,7 +290,11 @@ export default function OffreDetailPage() {
         xp_reward: gen.xp_reward,
         status: 'published',
         source: 'ai',
-        job_posting: offre?.titre ?? '',
+        // Le texte COMPLET, pas seulement le titre (13/08/2026). Avant, la
+        // quete enregistrait 62 caracteres au lieu de 7252, ce qui faussait
+        // aussi le decor de la cinematique, qui lit ce champ.
+        job_posting: `${offre?.titre ?? ''}
+${offre?.notes ?? ''}`,
         offre_id: id,
         created_by: user!.id,
       })
