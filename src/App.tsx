@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { RequireAuth, RequireRole } from '@/components/guards'
+import { RedirigeSiConnecte, RequireAuth, RequireRole } from '@/components/guards'
 import AppLayout from '@/components/layout/AppLayout'
 import LandingPage from '@/pages/LandingPage'
 import LoginPage from '@/pages/auth/LoginPage'
@@ -26,8 +26,28 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      {/*
+        Connexion et inscription sont fermées à qui possède déjà une session
+        (13/08/2026) : elles étaient publiques et nues, si bien qu'un
+        utilisateur connecté tombait sur le formulaire de connexion et
+        pouvait croire que sa session avait sauté.
+      */}
+      <Route
+        path="/login"
+        element={
+          <RedirigeSiConnecte>
+            <LoginPage />
+          </RedirigeSiConnecte>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <RedirigeSiConnecte>
+            <RegisterPage />
+          </RedirigeSiConnecte>
+        }
+      />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route path="/u/:username" element={<PortfolioPage />} />
 

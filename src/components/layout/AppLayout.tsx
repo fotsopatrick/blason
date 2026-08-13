@@ -76,6 +76,20 @@ export default function AppLayout() {
           </NavLink>
         </li>
       ))}
+      {/*
+        Le Royaume (13/08/2026) — la vue de progression par compétence.
+
+        C'est une page autonome en canvas servie par le même serveur sur
+        /royaume, pas une route React : d'où une balise <a> et non un
+        <NavLink>. Le clic recharge donc la page. Elle partage la session par
+        la clé localStorage « questforge-token », comme le reste de l'app.
+      */}
+      <li>
+        <a href="/royaume/" onClick={onClick}>
+          <span aria-hidden>🗺️</span>
+          Le Royaume
+        </a>
+      </li>
     </ul>
   )
 

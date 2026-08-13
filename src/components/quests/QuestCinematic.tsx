@@ -106,6 +106,21 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines
 }
 
+/**
+ * Tronque proprement une ligne trop large (13/08/2026).
+ *
+ * `wrapText` coupe aux espaces : un mot unique plus large que le cadre — une
+ * URL, un identifiant, un intitulé collé — la traverse quand même. C'est ce
+ * qui faisait déborder le titre des deux côtés de l'écran sur l'offre
+ * « Principal AI Engineering Architect — Robots & Pencils ».
+ */
+function ellipser(ctx: CanvasRenderingContext2D, texte: string, maxWidth: number): string {
+  if (ctx.measureText(texte).width <= maxWidth) return texte
+  let t = texte
+  while (t.length > 1 && ctx.measureText(`${t}…`).width > maxWidth) t = t.slice(0, -1)
+  return `${t.trimEnd()}…`
+}
+
 // ---------------------------------------------------------------------------
 // Dessin du décor
 // ---------------------------------------------------------------------------
@@ -467,22 +482,54 @@ function drawTitle(
   if (a <= 0) return
   ctx.save()
   ctx.globalAlpha = a
-  const titleSize = Math.max(24, Math.round(w * 0.042))
+  // LE TITRE TIENT DANS LE CADRE (corrigé le 13/08/2026).
+  //
+  // Il était écrit d'un seul `fillText`, sans contrainte de largeur : un
+  // intitulé d'offre réel (« Principal AI Engineering Architect — Robots &
+  // Pencils ») dépassait des deux côtés du canvas. Le helper `wrapText`
+  // existait pourtant déjà dans ce fichier — il ne servait qu'au dialogue.
+  //
+  // On réduit d'abord la taille pour tenir en deux lignes, puis on tronque
+  // ce qui dépasse encore. Réduire seulement finirait illisible ; tronquer
+  // seulement amputerait des titres qui tenaient en deux lignes.
+  const maxW = w * 0.86
+  let titleSize = Math.max(24, Math.round(w * 0.042))
+  let lignesTitre: string[] = []
+  for (;;) {
+    ctx.font = `700 ${titleSize}px Cinzel, Georgia, serif`
+    lignesTitre = wrapText(ctx, quest.title, maxW)
+    if (lignesTitre.length <= 2 || titleSize <= 15) break
+    titleSize -= 2
+  }
+  if (lignesTitre.length > 2) lignesTitre = lignesTitre.slice(0, 2)
+  ctx.font = `700 ${titleSize}px Cinzel, Georgia, serif`
+  lignesTitre = lignesTitre.map((l) => ellipser(ctx, l, maxW))
+
   ctx.textAlign = 'center'
   ctx.fillStyle = 'rgba(255, 246, 224, 0.92)'
   ctx.shadowColor = theme.accent
   ctx.shadowBlur = 22
-  ctx.font = `700 ${titleSize}px Cinzel, Georgia, serif`
-  ctx.fillText(quest.title, w / 2, h * 0.34)
+  const hauteurLigne = titleSize * 1.06
+  // Le bloc reste centré sur h*0.34 quel que soit le nombre de lignes.
+  const yTitre = h * 0.34 - ((lignesTitre.length - 1) * hauteurLigne) / 2
+  lignesTitre.forEach((ligne, i) => {
+    ctx.fillText(ligne, w / 2, yTitre + i * hauteurLigne)
+  })
+  const basTitre = yTitre + (lignesTitre.length - 1) * hauteurLigne
+
   ctx.shadowBlur = 0
   ctx.font = `600 ${Math.max(12, Math.round(titleSize * 0.42))}px Inter, sans-serif`
   ctx.fillStyle = hexToRgba(theme.accent, 0.9)
-  ctx.fillText(theme.biomeName, w / 2, h * 0.34 + titleSize * 0.9)
+  ctx.fillText(ellipser(ctx, theme.biomeName, maxW), w / 2, basTitre + titleSize * 0.9)
   const offre = offreLabel(quest)
   if (offre) {
     ctx.font = `500 ${Math.max(11, Math.round(titleSize * 0.34))}px Inter, sans-serif`
     ctx.fillStyle = 'rgba(230, 220, 245, 0.7)'
-    ctx.fillText(`Issue de l'offre : ${offre}`, w / 2, h * 0.34 + titleSize * 1.35)
+    ctx.fillText(
+      ellipser(ctx, `Issue de l'offre : ${offre}`, maxW),
+      w / 2,
+      basTitre + titleSize * 1.35,
+    )
   }
   ctx.restore()
 }
@@ -621,6 +668,19 @@ export default function QuestCinematic({ quest, onDone }: QuestCinematicProps) {
   const [ended, setEnded] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
 
+  // Les pastilles d'information en bas à gauche répètent mot pour mot ce que
+  // le carton-titre affiche déjà au centre : on ne les montre qu'une fois
+  // l'intro passée.
+  //
+  // On pilote leur opacité PAR LE DOM, pas par un état React. Le passage de
+  // phase se produit dans la boucle d'animation ; y déclencher un rendu React
+  // mêle deux horloges et a suffi, au premier essai, à figer la scène sur le
+  // carton-titre. Une boucle à 60 images par seconde ne doit rien re-rendre.
+  const pastillesRef = useRef<HTMLDivElement>(null)
+  const montrerPastilles = (visible: boolean) => {
+    if (pastillesRef.current) pastillesRef.current.style.opacity = visible ? '1' : '0'
+  }
+
   useEffect(() => {
     const theme = themeRef.current
     const canvas = canvasRef.current
@@ -657,6 +717,8 @@ export default function QuestCinematic({ quest, onDone }: QuestCinematicProps) {
           if (sim.t >= 4.4) {
             sim.phase = 'entrance'
             sim.t = 0
+            // Une seule fois, à la transition : surtout pas à chaque image.
+            montrerPastilles(true)
           }
           break
         case 'entrance': {
@@ -750,6 +812,9 @@ export default function QuestCinematic({ quest, onDone }: QuestCinematicProps) {
     pausedRef.current = false
     setPlaying(true)
     setEnded(false)
+    // On repart du carton-titre : les pastilles doivent se retirer à nouveau,
+    // sinon elles doublent le titre au second visionnage.
+    montrerPastilles(false)
     lastRef.current = performance.now()
   }
 
@@ -758,6 +823,9 @@ export default function QuestCinematic({ quest, onDone }: QuestCinematicProps) {
     sim.phase = 'outro'
     sim.t = 1.05
     sim.talking = false
+    // Passer l'intro saute la transition qui retire le voile : sans ceci, les
+    // pastilles resteraient invisibles jusqu'à la fin de la scène.
+    montrerPastilles(true)
   }
 
   if (collapsed) {
@@ -776,12 +844,29 @@ export default function QuestCinematic({ quest, onDone }: QuestCinematicProps) {
   return (
     <div ref={wrapRef} className="relative aspect-[16/9] max-h-[540px] w-full overflow-hidden rounded-box bg-black">
       <canvas ref={canvasRef} className="absolute inset-0" aria-label={`Cinématique de la quête : ${quest.title}`} />
-      <div className="pointer-events-none absolute bottom-3 left-4 flex max-w-[60%] flex-col gap-0.5">
-        <span className="badge badge-sm border-primary/40 bg-black/40 font-semibold text-primary backdrop-blur-sm">
+      {/*
+        Les pastilles de contexte. Deux corrections (13/08/2026) :
+
+        1. Elles ne s'affichent plus PENDANT le carton-titre, qui écrit déjà
+           le biome et l'offre au centre de l'image — on lisait la même chose
+           deux fois, à deux endroits.
+        2. `badge` est une pastille sur une seule ligne : un intitulé d'offre
+           réel en débordait. `truncate` + `max-w-full` la coupent proprement,
+           et le titre natif donne le texte entier au survol.
+      */}
+      <div
+        ref={pastillesRef}
+        style={{ opacity: 0 }}
+        className="pointer-events-none absolute bottom-3 left-4 flex max-w-[min(60%,26rem)] flex-col items-start gap-0.5 transition-opacity duration-500"
+      >
+        <span className="badge badge-sm max-w-full shrink-0 justify-start truncate border-primary/40 bg-black/40 font-semibold text-primary backdrop-blur-sm">
           🎬 {themeRef.current.biomeName}
         </span>
         {offreLabel(quest) && (
-          <span className="badge badge-sm bg-black/40 text-base-content/70 backdrop-blur-sm">
+          <span
+            className="badge badge-sm max-w-full shrink-0 justify-start truncate bg-black/40 text-base-content/70 backdrop-blur-sm"
+            title={`Issue de l'offre : ${offreLabel(quest)}`}
+          >
             Issue de l'offre : {offreLabel(quest)}
           </span>
         )}
