@@ -1004,8 +1004,26 @@ app.use('/royaume', express.static(ROYAUME))
 // Statique : le build React
 // ---------------------------------------------------------------------------
 app.use(express.static(DIST))
-app.use((req, res, next) => {
+
+// LES CHEMINS QUI SENTENT LA FOUILLE RÉPONDENT 404 (13/08/2026).
+//
+// Le repli SPA renvoyait index.html pour TOUT ce qui n'est pas /api/ — donc
+// un code 200 sur /.env, /.git/config, /wp-login.php. Aucun secret ne sortait
+// (c'était la page d'accueil, à l'octet près), mais un 200 est une réponse
+// en soi : il dit au scanner « il y a quelque chose ici », là où un 404 ne
+// dit rien.
+//
+// Mesure sur trois jours de journaux : 8 359 requêtes de ce genre, depuis 88
+// adresses. Aucune ne cherchait Blason en particulier — elles balaient tout
+// Internet. Elles ne trouveront désormais rien à interpréter.
+//
+// On ne fait pas semblant que le fichier existe et on ne piège personne : on
+// répond simplement ce qui est vrai — cette adresse n'existe pas.
+const CHEMINS_DE_FOUILLE = /(^|\/)\.(env|git|svn|hg|aws|ssh|htaccess|htpasswd|DS_Store)|\/(wp-|xmlrpc\.php|phpmyadmin|vendor\/phpunit|eval-stdin)/i
+
+app.use((req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ message: 'introuvable' })
+  if (CHEMINS_DE_FOUILLE.test(req.path)) return res.status(404).type('text/plain').send('Not Found')
   return res.sendFile(path.join(DIST, 'index.html'))
 })
 
